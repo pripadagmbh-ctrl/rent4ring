@@ -27,7 +27,7 @@ function generateCode(carId: string, percent: number): string {
  * Voucher codes are kept per car and only replaced when the driver earns a
  * better one, so nobody loses a reward by driving another lap.
  */
-function useVoucher(carId: string, percent: number): string | null {
+function useVoucher(carId: string, percent: number): { code: string; percent: number } | null {
   return useMemo(() => {
     if (percent <= 0) return null;
     const key = `r4r.voucher.${carId}`;
@@ -35,20 +35,26 @@ function useVoucher(carId: string, percent: number): string | null {
       const raw = localStorage.getItem(key);
       if (raw) {
         const saved = JSON.parse(raw) as { code: string; percent: number };
-        if (saved.percent >= percent) return saved.code;
+        // Return the whole voucher, not just its code — the UI must show the
+        // percentage the code is actually worth, not this lap's.
+        if (saved.percent >= percent) return saved;
       }
       const code = generateCode(carId, percent);
       localStorage.setItem(key, JSON.stringify({ code, percent }));
-      return code;
+      return { code, percent };
     } catch {
-      return generateCode(carId, percent);
+      return { code: generateCode(carId, percent), percent };
     }
   }, [carId, percent]);
 }
 
 export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
-  const percent = result.discountPercent;
-  const code = useVoucher(car.id, percent);
+  const lapPercent = result.discountPercent;
+  const voucher = useVoucher(car.id, lapPercent);
+  // The saved code can be worth more than this lap earned — amount, ladder and
+  // code must all describe the same voucher.
+  const percent = voucher ? voucher.percent : lapPercent;
+  const code = voucher ? voucher.code : null;
   const [copied, setCopied] = useState(false);
 
   const confetti = useMemo(
@@ -79,7 +85,8 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
   };
 
   const delta = result.time - car.targetLapSec;
-  const speech = pickSpeech(result, percent);
+  // Herr Müller comments on the lap that was just driven, not the saved code.
+  const speech = pickSpeech(result, lapPercent);
 
   return (
     <div className="ceremony">
@@ -153,7 +160,7 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
         {/* --------------------------------------------------- discount ladder */}
         <div className={`voucher ${percent > 0 ? '' : 'voucher--empty'}`}>
           <div className="voucher__head">
-            {percent > 0 ? 'Your discount' : 'No discount — this time'}
+            {percent > 0 ? (percent > lapPercent ? 'Your best voucher' : 'Your discount') : 'No discount — this time'}
           </div>
           <div className="voucher__amount">{percent}% </div>
 
@@ -180,6 +187,8 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
                   ? `You were ${Math.abs(delta).toFixed(1)} s inside the ${formatLap(car.targetLapSec)} target — full marks.`
                   : `Target is ${formatLap(car.targetLapSec)}; you are ${delta.toFixed(1)} s off the full 10%.`}
                 {result.damageCost > 0 && ' The bodywork bill did cost you a little, mind.'}
+                {percent > lapPercent &&
+                  ` This lap was worth ${lapPercent}%, but your earlier ${percent}% code stands.`}
               </div>
             </>
           ) : (
