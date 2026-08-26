@@ -94,8 +94,13 @@ function driveLap(carIndex: number, assists: boolean) {
     // Lateral capacity is mu*g*(1 + k*v^2), so v^2/R = mu*g*(1 + k*v^2)
     // solves to v^2 = mu*g / (1/R - mu*g*k).
     let vMax = car.topSpeedKmh / 3.6;
-    const scanPoints = Math.round(260 / track.spacing);
     const mu = car.grip;
+    const decel = mu * G * 0.9;
+    // Scan as far as the worst-case braking distance from top speed (plus a
+    // reserve) — a fixed 260 m is too short for the >300 km/h cars, which
+    // then brake systematically late into slow corners.
+    const horizonM = (vMax * vMax) / (2 * decel) + 40;
+    const scanPoints = Math.round(horizonM / track.spacing);
     for (let k = 2; k < scanPoints; k++) {
       const p = track.at(idx + k);
       const curv = Math.abs(p.curvature);
@@ -104,7 +109,6 @@ function driveLap(carIndex: number, assists: boolean) {
       // A negative denominator means downforce alone can hold the corner flat.
       const corner = denom <= 1e-6 ? car.topSpeedKmh / 3.6 : Math.sqrt((mu * G) / denom);
       const distance = k * track.spacing;
-      const decel = mu * G * 0.9;
       const entry = Math.sqrt(Math.max(0, corner * corner + 2 * decel * distance));
       vMax = Math.min(vMax, entry);
     }
