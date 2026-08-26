@@ -1088,3 +1088,53 @@
     right: 14px;
   }
 }
+
+/* =====================================================================
+   iPhone/Android safe areas. viewport-fit=cover lets the page run edge to
+   edge (no landscape letterbox); these offsets then keep the controls out
+   of the notch and off the home indicator. Zero on devices without insets.
+   ===================================================================== */
+@media (max-width: 760px) {
+  .hud__pause {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  .hud__topleft {
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: calc(18px + env(safe-area-inset-left, 0px));
+  }
+  .hud__section {
+    top: calc(16px + env(safe-area-inset-top, 0px));
+  }
+  .hud__bottomright {
+    top: calc(62px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  .revbar {
+    top: calc(122px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  .minimap {
+    top: calc(150px + env(safe-area-inset-top, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
+  }
+  .mueller {
+    top: calc(104px + env(safe-area-inset-top, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+  }
+  .ps-pad {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .ps-pad--left {
+    left: calc(14px + env(safe-area-inset-left, 0px));
+  }
+  .ps-pad--right {
+    left: calc(102px + env(safe-area-inset-left, 0px));
+  }
+  .ps-pad--square {
+    right: calc(102px + env(safe-area-inset-right, 0px));
+  }
+  .ps-pad--cross {
+    right: calc(14px + env(safe-area-inset-right, 0px));
+  }
+}
