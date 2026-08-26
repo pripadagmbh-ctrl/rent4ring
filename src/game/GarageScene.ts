@@ -51,9 +51,15 @@ export class GarageScene {
     this.scene.background = new THREE.Color(0x14171b);
     // Metallic paint needs something to reflect, or it shades like dark glass.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const roomEnv = new RoomEnvironment();
+    // pmrem.dispose() frees the generator but not the baked render target —
+    // keep that in disposables so dispose() can free it.
+    const envRT = pmrem.fromScene(roomEnv, 0.04);
+    this.scene.environment = envRT.texture;
     this.scene.environmentIntensity = 0.55;
     pmrem.dispose();
+    roomEnv.dispose();
+    this.disposables.push(envRT);
     this.buildRoom();
     this.scene.add(this.turntable);
     this.setCar(car);

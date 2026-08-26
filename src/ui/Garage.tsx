@@ -1,16 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLEET, type Car } from '../data/fleet';
 import { GarageScene } from '../game/GarageScene';
+import { farewellLine, garageLines, type MuellerLine } from '../data/muellerLines';
 import { formatLap } from './format';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
+/** How long one of his garage lines stays up before the next one. */
+const LINE_DWELL_MS = 6200;
+/** Beat between his send-off and the car actually rolling out. */
+const FAREWELL_MS = 2100;
+
 interface Props {
   selected: Car;
   onSelect(car: Car): void;
-  onStart(): void;
+  /** The send-off he gave is handed on, so the drive opens on the same line. */
+  onStart(farewell: MuellerLine): void;
   onBack(): void;
   assists: boolean;
   onAssistsChange(value: boolean): void;
@@ -44,11 +51,50 @@ export default function Garage({
   const sceneRef = useRef<GarageScene | null>(null);
   const dragging = useRef<number | null>(null);
 
+  // Herr Müller works the floor: he cycles through what he has to say about the
+  // car on the turntable, then sees the driver off.
+  const [lineIndex, setLineIndex] = useState(0);
+  const [farewell, setFarewell] = useState<MuellerLine | null>(null);
+  const leaveTimer = useRef<number | null>(null);
+
+  const lines = garageLines(selected.id);
+  const spoken = farewell ?? lines[lineIndex % lines.length];
+
   useEffect(() => {
     const map: Record<string, number | null> = {};
     for (const car of FLEET) map[car.id] = readBest(car.id);
     setBests(map);
   }, []);
+
+  // A new car gets his opening line, not whatever point he had reached on the last one.
+  useEffect(() => {
+    setLineIndex(0);
+  }, [selected.id]);
+
+  useEffect(() => {
+    // Once he is saying goodbye he stays on that line until the car pulls away.
+    if (farewell || lines.length < 2) return;
+    const timer = window.setInterval(() => setLineIndex((i) => i + 1), LINE_DWELL_MS);
+    return () => window.clearInterval(timer);
+  }, [farewell, lines.length, selected.id]);
+
+  useEffect(() => {
+    return () => {
+      if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current);
+    };
+  }, []);
+
+  const headOut = useCallback(() => {
+    // Guard the double tap: the send-off must not restart, and the drive must
+    // not be queued twice.
+    if (leaveTimer.current !== null) return;
+    const line = farewellLine(selected.id);
+    setFarewell(line);
+    leaveTimer.current = window.setTimeout(() => {
+      leaveTimer.current = null;
+      onStart(line);
+    }, FAREWELL_MS);
+  }, [onStart, selected.id]);
 
   // The showroom renders the selected car on its turntable.
   useEffect(() => {
@@ -156,13 +202,21 @@ export default function Garage({
           </div>
           <div className="showroom__hint">Drag to rotate</div>
 
-          {/* Herr Müller mans the showroom floor. */}
-          <div className="showroom__mueller">
-            <div className="showroom__mueller-speech">
-              Kiss the Armco out there and you can leave the Amex behind on your way out&nbsp;😉 Beat the
-              target and I&rsquo;ll knock ten percent off.
+          {/* Herr Müller mans the showroom floor and talks you through the car. */}
+          <div className={`showroom__mueller ${farewell ? 'showroom__mueller--leaving' : ''}`}>
+            <div className="showroom__mueller-speech" aria-live="polite">
+              <span className="showroom__mueller-who">Herr Müller</span>
+              {/* Keyed on the text so a new line re-runs the entry animation. */}
+              <span key={spoken.text} className="showroom__mueller-text">
+                {spoken.text}
+              </span>
             </div>
-            <Gorilla mood="happy" className="showroom__mueller-fig" />
+            <Gorilla
+              mood={spoken.mood}
+              gesture={spoken.gesture ?? 'none'}
+              talking
+              className="showroom__mueller-fig"
+            />
           </div>
         </div>
 
@@ -214,8 +268,12 @@ export default function Garage({
             </button>
           </div>
 
-          <button className="btn-primary btn-primary--block" onClick={onStart}>
-            Head out
+          <button
+            className="btn-primary btn-primary--block"
+            onClick={headOut}
+            disabled={farewell !== null}
+          >
+            {farewell ? 'Rolling out…' : 'Head out'}
           </button>
         </div>
       </div>

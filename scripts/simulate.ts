@@ -27,7 +27,7 @@ function driveLap(carIndex: number, assists: boolean) {
   let lastIndex = vehicle.trackIndex;
   let topSpeed = 0;
   let contacts = 0;
-  let wasInContact = false;
+  let inContact = false;
   let offTrackTime = 0;
   let maxLateral = 0;
   let vTarget = 0;
@@ -94,8 +94,13 @@ function driveLap(carIndex: number, assists: boolean) {
     // Lateral capacity is mu*g*(1 + k*v^2), so v^2/R = mu*g*(1 + k*v^2)
     // solves to v^2 = mu*g / (1/R - mu*g*k).
     let vMax = car.topSpeedKmh / 3.6;
-    const scanPoints = Math.round(260 / track.spacing);
     const mu = car.grip;
+    const decel = mu * G * 0.9;
+    // Scan as far as the worst-case braking distance from top speed (plus a
+    // reserve) — a fixed 260 m is too short for the >300 km/h cars, which
+    // then brake systematically late into slow corners.
+    const horizonM = (vMax * vMax) / (2 * decel) + 40;
+    const scanPoints = Math.round(horizonM / track.spacing);
     for (let k = 2; k < scanPoints; k++) {
       const p = track.at(idx + k);
       const curv = Math.abs(p.curvature);
@@ -104,7 +109,6 @@ function driveLap(carIndex: number, assists: boolean) {
       // A negative denominator means downforce alone can hold the corner flat.
       const corner = denom <= 1e-6 ? car.topSpeedKmh / 3.6 : Math.sqrt((mu * G) / denom);
       const distance = k * track.spacing;
-      const decel = mu * G * 0.9;
       const entry = Math.sqrt(Math.max(0, corner * corner + 2 * decel * distance));
       vMax = Math.min(vMax, entry);
     }
@@ -123,9 +127,9 @@ function driveLap(carIndex: number, assists: boolean) {
     const telemetry = vehicle.step(dt, { throttle, brake, steer, handbrake: false }, track);
     time += dt;
     topSpeed = Math.max(topSpeed, telemetry.speedKmh);
-    // Edge-count, matching Game.ts: one touch = one contact, however long it grinds.
-    if (telemetry.contact && !wasInContact) contacts++;
-    wasInContact = telemetry.contact;
+    // Count contact events, not 120 Hz frames — same debounce as Game.ts.
+    if (telemetry.contact && !inContact) contacts++;
+    inContact = telemetry.contact;
     if (telemetry.offTrack) offTrackTime += dt;
 
     // A human would press R; do the same so one bad corner does not skew the run.
@@ -161,6 +165,48 @@ function driveLap(carIndex: number, assists: boolean) {
   };
 }
 
+/** Start index of the longest near-zero-curvature run — the place for a drag test. */
+function longestStraightIndex(track: Track): number {
+  let bestStart = 0;
+  let bestLen = 0;
+  let runStart = 0;
+  let runLen = 0;
+  // Scan two laps so a straight crossing the start line is not cut in half.
+  for (let i = 0; i < track.count * 2; i++) {
+    if (Math.abs(track.at(i % track.count).curvature) < 3e-4) {
+      if (runLen === 0) runStart = i;
+      runLen++;
+      if (runLen > bestLen) {
+        bestLen = runLen;
+        bestStart = runStart;
+      }
+    } else {
+      runLen = 0;
+    }
+  }
+  return bestStart % track.count;
+}
+
+/**
+ * Straight-line 0–100 km/h: full throttle from a standing start on the longest
+ * straight, so the fleet's zeroToHundred figures can be checked against the
+ * model (the KONTEXT.md checkpoint).
+ */
+function measureZeroToHundred(carIndex: number, track: Track): number {
+  const car = FLEET[carIndex];
+  const vehicle = new Vehicle(car);
+  vehicle.assists = true;
+  vehicle.placeOnTrack(track, longestStraightIndex(track), 0);
+  const dt = 1 / 120;
+  let time = 0;
+  while (time < 20) {
+    const telemetry = vehicle.step(dt, { throttle: 1, brake: 0, steer: 0, handbrake: false }, track);
+    time += dt;
+    if (telemetry.speedKmh >= 100) return time;
+  }
+  return Infinity;
+}
+
 function fmt(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -178,6 +224,18 @@ const curvs = track.points.map((p) => Math.abs(p.curvature)).filter((c) => c > 1
 const tightest = Math.max(...curvs);
 console.log('tightest radius   :', (1 / tightest).toFixed(1), 'm');
 console.log('avg half-width    :', (track.points.reduce((a, p) => a + p.halfWidth, 0) / track.count).toFixed(2), 'm');
+console.log('');
+
+console.log('=== 0–100 km/h (full throttle, longest straight) ===');
+for (let i = 0; i < FLEET.length; i++) {
+  const car = FLEET[i];
+  const t = measureZeroToHundred(i, track);
+  const d = t - car.zeroToHundred;
+  console.log(
+    `${(car.brand + ' ' + car.model).padEnd(26)} sim ${t.toFixed(2).padStart(5)} s  ` +
+      `Angabe ${car.zeroToHundred.toFixed(1).padStart(4)} s  Δ${((d >= 0 ? '+' : '') + d.toFixed(2)).padStart(6)} s`,
+  );
+}
 console.log('');
 
 console.log('=== Auto-driver lap times ===');

@@ -11,15 +11,13 @@ export class EngineAudio {
   private noise: AudioBufferSourceNode | null = null;
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
-  private started = false;
-  /** Engine damp — set for pause AND user mute. */
-  private muted = false;
-  /**
-   * The user's own sound toggle, tracked separately: pausing the game damps
-   * the engine but must not swallow one-shot SFX like the podium fanfare.
-   */
-  userMuted = false;
+  /** Bus for one-shot SFX (fanfare) that must survive the pause-mute. */
   private sfx: GainNode | null = null;
+  private started = false;
+  /** Combined pause-or-user mute, driving the engine master. */
+  private muted = false;
+  /** The user's actual mute toggle, driving the SFX bus. */
+  private userMuted = false;
 
   constructor(private car: Car) {}
 
@@ -38,10 +36,10 @@ export class EngineAudio {
     master.connect(ctx.destination);
     this.master = master;
 
-    // One-shot effects bypass the master so a paused (damped) engine cannot
-    // silence them; the user's mute still gates them at the call sites.
+    // The fanfare bypasses the master: the ceremony pauses the game in the
+    // same moment it plays, and the pause-mute would swallow it otherwise.
     const sfx = ctx.createGain();
-    sfx.gain.value = 0.9;
+    sfx.gain.value = this.userMuted ? 0.0001 : 1;
     sfx.connect(ctx.destination);
     this.sfx = sfx;
 
@@ -95,7 +93,6 @@ export class EngineAudio {
     this.noise = noise;
     this.noiseGain = noiseGain;
 
-    // A drive started while muted must stay muted (H7).
     master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
 
@@ -163,11 +160,7 @@ export class EngineAudio {
     osc.stop(now + 0.32);
   }
 
-  /**
-   * Celebratory fanfare for the podium. Runs on the SFX bus: the ceremony
-   * pauses the game the moment the lap completes, and the pause damp on the
-   * master used to swallow the fanfare before its first note landed.
-   */
+  /** Celebratory fanfare for the podium. */
   fanfare(): void {
     const ctx = this.ctx;
     if (!ctx || !this.sfx || this.userMuted) return;
@@ -191,6 +184,14 @@ export class EngineAudio {
     this.muted = muted;
     if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(muted ? 0.0001 : 0.35, this.ctx.currentTime, 0.1);
+    }
+  }
+
+  /** The user's mute toggle alone — pause must not silence the SFX bus. */
+  setUserMuted(muted: boolean): void {
+    this.userMuted = muted;
+    if (this.sfx && this.ctx) {
+      this.sfx.gain.setTargetAtTime(muted ? 0.0001 : 1, this.ctx.currentTime, 0.05);
     }
   }
 
