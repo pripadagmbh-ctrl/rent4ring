@@ -1,0 +1,1090 @@
+/* ==================================================================== menu */
+.menu {
+  display: grid;
+  place-items: center;
+  background: radial-gradient(1100px 700px at 50% -5%, rgba(229, 20, 43, 0.2), transparent 62%), var(--bg);
+  overflow-y: auto;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.menu__glow {
+  position: absolute;
+  inset: auto 0 -30% 0;
+  height: 60%;
+  background: radial-gradient(60% 100% at 50% 100%, rgba(57, 192, 255, 0.12), transparent 70%);
+  pointer-events: none;
+}
+
+.menu__inner {
+  position: relative;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.menu__logo {
+  filter: drop-shadow(0 14px 40px rgba(229, 20, 43, 0.4));
+}
+
+.menu__tagline {
+  font-family: var(--font-display);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.menu__lead {
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 15px;
+  max-width: 60ch;
+}
+
+.menu__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.btn-primary--big {
+  font-size: 24px;
+  padding: 17px 52px;
+}
+
+.btn-ghost--big {
+  font-size: 16px;
+  padding: 17px 32px;
+}
+
+.btn-primary--block {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.menu__facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-top: 18px;
+}
+
+.fact {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 8px;
+}
+
+.fact b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.fact span {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.menu__mueller {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 22px;
+  text-align: left;
+}
+
+.menu__mueller-fig {
+  width: clamp(190px, 26vw, 260px);
+  flex: none;
+}
+
+.speech--menu {
+  position: static;
+  max-width: 340px;
+  animation: none;
+  font-size: 14px;
+}
+
+.menu__legal {
+  position: relative;
+  margin-top: 30px;
+  font-size: 11px;
+  color: #55606d;
+  max-width: 70ch;
+  line-height: 1.6;
+}
+
+/* ================================================================== garage */
+.brand--button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  padding: 4px;
+  border-radius: 10px;
+  transition: 0.15s;
+}
+
+.brand--button:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.garage__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.showroom {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #14171b;
+  min-height: 460px;
+}
+
+.showroom__canvas {
+  width: 100%;
+  height: 460px;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.showroom__canvas:active {
+  cursor: grabbing;
+}
+
+/* The nameplate lives in the top-left corner, clear of the car. */
+.showroom__nameplate {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  pointer-events: none;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+}
+
+/* The lower plate is a slim band: enough for the copy, not enough to bury the
+   car behind it. */
+.showroom__plate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 34px 20px 14px;
+  background: linear-gradient(to top, rgba(7, 9, 12, 0.92) 40%, transparent);
+  pointer-events: none;
+}
+
+.showroom__brand {
+  font-family: var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.showroom__model {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.showroom__blurb {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  max-width: 62ch;
+  margin: 0 0 10px;
+}
+
+.showroom__specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.showroom__specs b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+.showroom__specs span {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.showroom__hint {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+/* Herr Müller standing on the showroom floor, front right of the turntable. */
+.showroom__mueller {
+  position: absolute;
+  right: 8px;
+  bottom: 96px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.55));
+}
+
+.showroom__mueller-fig {
+  width: clamp(110px, 15vw, 170px);
+  flex: none;
+}
+
+.showroom__mueller-speech {
+  max-width: 200px;
+  background: #fff;
+  color: #10141a;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  margin-bottom: 58px;
+  position: relative;
+}
+
+.showroom__mueller-speech::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  bottom: 14px;
+  border: 8px solid transparent;
+  border-left-color: #fff;
+  border-right: 0;
+}
+
+.garage__side {
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+
+.fleet-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  transition: 0.15s;
+}
+
+.fleet-row:hover {
+  border-color: #3a4756;
+}
+
+.fleet-row--active {
+  border-color: var(--red);
+  background: linear-gradient(90deg, rgba(229, 20, 43, 0.16), transparent);
+}
+
+.fleet-row__chip {
+  width: 10px;
+  height: 26px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.fleet-row__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.fleet-row__name b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.15;
+}
+
+.fleet-row__name em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fleet-row__ps {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fleet-row__best {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--green);
+}
+
+.garage__mueller {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px;
+  margin: 18px 0 4px;
+}
+
+.garage__mueller-fig {
+  width: 84px;
+  flex: none;
+}
+
+.garage__mueller strong {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.garage__mueller p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-top: 3px;
+}
+
+/* ========================================================= Mueller HUD panel */
+.mueller {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  width: 208px;
+  background: rgba(8, 11, 15, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  backdrop-filter: blur(10px);
+  padding: 10px;
+  font-family: var(--font-body);
+  transition: border-color 0.25s;
+}
+
+.mueller__stage {
+  height: 104px;
+  display: grid;
+  place-items: end center;
+  overflow: hidden;
+}
+
+.mueller__stage .gorilla {
+  width: 118px;
+}
+
+.mueller__name {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.mueller__line {
+  font-size: 11.5px;
+  line-height: 1.35;
+  min-height: 31px;
+  margin-bottom: 7px;
+}
+
+.mueller__damage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mueller__damage-head b {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.mueller__damage-head b.is-billing {
+  color: #ff6a5a;
+}
+
+.mueller__damage-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.mueller__damage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), #ff6a5a);
+  transition: width 0.3s;
+}
+
+/* ------------------------------------------------------- gorilla moods */
+.gorilla .mouth,
+.gorilla .gorilla__sweat {
+  display: none;
+}
+
+.gorilla--idle .mouth--flat,
+.gorilla--happy .mouth--grin,
+.gorilla--cheer .mouth--grin,
+.gorilla--trophy .mouth--grin,
+.gorilla--angry .mouth--roar,
+.gorilla--scared .mouth--bite {
+  display: block;
+}
+
+/* Both arms pivot at the shoulder joint. transform-box must be view-box or the
+   origin is measured against each group's own bounding box, which tears the
+   arm away from the body as soon as it moves. */
+.gorilla__arm-left,
+.gorilla__arm-right {
+  transform-box: view-box;
+}
+
+/* Origins sit at the shoulder joints. transform-box: view-box measures them in
+   view-box space, but the wrapper's own translate(±11px) is applied AFTER the
+   inner group's CSS transform resolves against the untranslated coordinates —
+   so the joint stays at its original 86/174, not the shifted position. */
+.gorilla__arm-left {
+  transform-origin: 86px 100px;
+}
+
+.gorilla__arm-right {
+  transform-origin: 174px 100px;
+}
+
+/* The shades sit on his nose until he loses his composure, then get shoved up
+   onto his forehead so you can read his face. */
+.gorilla__shades {
+  transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.gorilla--angry .gorilla__shades,
+.gorilla--scared .gorilla__shades {
+  transform: translateY(-22px) rotate(-3deg);
+}
+
+/* Behind the shades the eyes are hidden, so soften them when they are worn. */
+.gorilla--idle .gorilla__eyes,
+.gorilla--happy .gorilla__eyes,
+.gorilla--cheer .gorilla__eyes,
+.gorilla--trophy .gorilla__eyes {
+  opacity: 0.35;
+}
+
+/* Angry: brows slam down and in, chest-beating, whole body shaking. */
+.gorilla--angry .gorilla__brow-l {
+  transform: translate(6px, 6px) rotate(20deg);
+}
+
+.gorilla--angry .gorilla__brow-r {
+  transform: translate(-6px, 6px) rotate(-20deg);
+}
+
+.gorilla--angry .gorilla__body {
+  animation: rage-shake 0.11s linear infinite;
+}
+
+.gorilla--angry .gorilla__arm-left {
+  animation: chest-beat 0.34s ease-in-out infinite;
+}
+
+.gorilla--angry .gorilla__arm-right {
+  animation: chest-beat 0.34s ease-in-out infinite reverse;
+}
+
+@keyframes rage-shake {
+  0%,
+  100% {
+    transform: translateX(-1.6px);
+  }
+  50% {
+    transform: translateX(1.6px);
+  }
+}
+
+@keyframes chest-beat {
+  50% {
+    transform: rotate(-13deg);
+  }
+}
+
+/* Scared: brows up, eyes wide, trembling, sweating, nails between the teeth. */
+.gorilla--scared .gorilla__brow-l {
+  transform: translate(-2px, -5px) rotate(-16deg);
+}
+
+.gorilla--scared .gorilla__brow-r {
+  transform: translate(2px, -5px) rotate(16deg);
+}
+
+.gorilla--scared .gorilla__eyes {
+  transform: scale(1.18);
+  transform-origin: 130px 45px;
+}
+
+.gorilla--scared .gorilla__body {
+  animation: tremble 0.09s linear infinite;
+}
+
+.gorilla--scared .gorilla__arm-right {
+  transform: rotate(-38deg);
+}
+
+.gorilla--scared .gorilla__sweat {
+  display: block;
+  animation: sweat-drip 1.1s ease-in infinite;
+}
+
+@keyframes tremble {
+  0%,
+  100% {
+    transform: translate(-1px, 0.6px);
+  }
+  50% {
+    transform: translate(1px, -0.6px);
+  }
+}
+
+@keyframes sweat-drip {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* Happy, cheering, on the podium. */
+.gorilla--idle .gorilla__body,
+.gorilla--happy .gorilla__body,
+.gorilla--trophy .gorilla__body {
+  animation: gorilla-bob 1.6s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+.gorilla--cheer .gorilla__body {
+  animation: gorilla-hop 0.62s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+.gorilla--cheer .gorilla__arm-right,
+.gorilla--trophy .gorilla__arm-right {
+  animation: trophy-raise 1.5s ease-in-out infinite;
+}
+
+.gorilla--cheer .gorilla__arm-left {
+  animation: trophy-raise 1.5s ease-in-out infinite reverse;
+}
+
+.gorilla--cheer .gorilla__pupil,
+.gorilla--happy .gorilla__pupil {
+  animation: eye-dart 2.4s ease-in-out infinite;
+}
+
+@keyframes gorilla-hop {
+  50% {
+    transform: translateY(-11px);
+  }
+}
+
+@keyframes eye-dart {
+  0%,
+  40%,
+  100% {
+    transform: translateX(0);
+  }
+  55%,
+  85% {
+    transform: translateX(2px);
+  }
+}
+
+/* --------------------------------------------------------- pause button */
+.hud__pause {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(8, 11, 15, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  z-index: 5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud__pause:active {
+  background: rgba(46, 58, 74, 0.85);
+}
+
+/* Keyboard hints sit below the pause button on desktop. */
+.hud__hint {
+  top: 60px;
+}
+
+/* ---------------------------------------------------- approach timebox */
+.timebox--approach {
+  border-color: rgba(57, 192, 255, 0.45);
+}
+
+.timebox__skip {
+  margin-top: 7px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 11px;
+  pointer-events: auto;
+  transition: 0.15s;
+}
+
+.timebox__skip:hover {
+  color: var(--text);
+  border-color: #3c4a5b;
+}
+
+/* ------------------------------------------------------ discount ladder */
+.ceremony__logo {
+  margin: 0 auto 12px;
+}
+
+.voucher--empty {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--line);
+  border-style: solid;
+}
+
+.voucher--empty .voucher__head,
+.voucher--empty .voucher__amount {
+  color: var(--muted);
+}
+
+.ladder {
+  margin: 12px 0 14px;
+}
+
+.ladder__bar {
+  height: 9px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.ladder__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6a12, var(--gold));
+  border-radius: 5px;
+  transition: width 0.7s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.ladder__scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------ responsive */
+@media (max-width: 1000px) {
+  .garage__layout {
+    grid-template-columns: 1fr;
+  }
+  .showroom__canvas {
+    height: 340px;
+  }
+  .showroom {
+    min-height: 340px;
+  }
+  /* On a phone the description would sit right on top of the car. */
+  .showroom__blurb {
+    display: none;
+  }
+  .showroom__plate {
+    padding: 20px 14px 10px;
+  }
+  .showroom__mueller {
+    bottom: 64px;
+  }
+  .showroom__mueller-fig {
+    width: 92px;
+  }
+  .showroom__mueller-speech {
+    max-width: 150px;
+    font-size: 10.5px;
+    padding: 8px 9px;
+    margin-bottom: 34px;
+  }
+}
+
+@media (max-width: 760px) {
+  .menu__facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .menu__mueller {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .speech--menu::after {
+    display: none;
+  }
+
+  /* On a phone the bottom band belongs to the controls alone. Everything that
+     is only there to be read moves up out of the way. */
+  .mueller {
+    top: 96px;
+    bottom: auto;
+    left: 10px;
+    width: 118px;
+    padding: 6px;
+  }
+  .mueller__stage {
+    height: 62px;
+  }
+  .mueller__stage .gorilla {
+    width: 72px;
+  }
+  .mueller__line {
+    font-size: 9.5px;
+    line-height: 1.3;
+    min-height: 24px;
+    margin-bottom: 5px;
+  }
+  .mueller__damage-head {
+    font-size: 8.5px;
+  }
+  .mueller__damage-head b {
+    font-size: 11px;
+  }
+
+  .minimap {
+    left: auto;
+    right: 10px;
+    top: 96px;
+    bottom: auto;
+    width: 104px;
+    height: 116px;
+  }
+
+  /* Speed and gear tuck in above the pedals. */
+  .hud__bottomright {
+    right: 12px;
+    bottom: auto;
+    top: 44px;
+    align-items: flex-start;
+  }
+  .revbar {
+    right: 12px;
+    top: 26px;
+    bottom: auto;
+    width: 150px;
+  }
+
+  .touch-controls {
+    height: 34%;
+  }
+  .ps-pad {
+    width: 76px;
+    height: 76px;
+    bottom: 14px;
+  }
+  .ps-pad--left {
+    left: 12px;
+  }
+  .ps-pad--right {
+    left: 100px;
+  }
+  .ps-pad--square {
+    right: 100px;
+  }
+  .ps-pad--cross {
+    right: 12px;
+  }
+}
+
+/* ------------------------------------------------- PS-style touch pads */
+.ps-pad {
+  position: absolute;
+  bottom: 22px;
+  width: 92px;
+  height: 92px;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.ps-pad svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ps-pad__ring {
+  fill: rgba(12, 16, 22, 0.62);
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.6;
+  transition: fill 0.08s;
+}
+
+.ps-pad:active .ps-pad__ring {
+  fill: rgba(46, 58, 74, 0.85);
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.ps-pad__glyph {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* PlayStation colours: blue cross, pink square. */
+.ps-pad__glyph--cross {
+  stroke: #7cb8f2;
+}
+
+.ps-pad__glyph--square {
+  stroke: #f2a0c8;
+}
+
+.ps-pad--left {
+  left: 22px;
+}
+
+.ps-pad--right {
+  left: 126px;
+}
+
+.ps-pad--square {
+  right: 126px;
+}
+
+.ps-pad--cross {
+  right: 22px;
+}
+
+.ps-pad__hint {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+/* The pause and results panels must always be reachable, however short the
+   screen — they scroll rather than pushing their buttons off the bottom. */
+.overlay {
+  overflow-y: auto;
+  align-items: start;
+}
+
+.overlay .dialog {
+  margin: auto;
+  max-height: none;
+}
+
+@media (max-height: 560px), (max-width: 760px) {
+  .dialog {
+    padding: 20px 18px;
+  }
+  .dialog h2 {
+    font-size: 26px;
+  }
+  .dialog__actions {
+    flex-direction: column;
+  }
+  .dialog__actions button {
+    width: 100%;
+  }
+  .ceremony {
+    align-items: start;
+  }
+  .ceremony__card {
+    margin: auto;
+  }
+}
+
+/* =====================================================================
+   Mobile HUD, consolidated. This block lives at the END of the stylesheet
+   on purpose: the base .ps-pad rules above beat earlier media queries on
+   source order, so the phone layout must come last to win.
+   ===================================================================== */
+@media (max-width: 760px) {
+  /* Top-left: compact lap/approach box. */
+  .timebox {
+    min-width: 0;
+    padding: 7px 11px;
+  }
+  .timebox__value {
+    font-size: 17px;
+  }
+  .timebox--small .timebox__value {
+    font-size: 13px;
+  }
+  .delta {
+    font-size: 13px;
+    min-width: 0;
+    padding: 5px 10px;
+  }
+
+  /* Top-centre: just the section name, squeezed between box and pause. */
+  .hud__section {
+    top: 16px;
+    left: 168px;
+    right: 58px;
+    transform: none;
+    text-align: center;
+  }
+  .hud__section-name {
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hud__section-dist,
+  .progressbar {
+    display: none;
+  }
+
+  /* Right rail: pause, then speed, then revs. */
+  .hud__pause {
+    top: 12px;
+    right: 12px;
+  }
+  .hud__bottomright {
+    top: 62px;
+    right: 12px;
+    bottom: auto;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .speedo__value {
+    font-size: 34px;
+  }
+  .speedo__unit {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .gear {
+    font-size: 26px;
+    width: 44px;
+    padding: 4px 0 7px;
+  }
+  .gear__label {
+    font-size: 8px;
+  }
+  .revbar {
+    top: 122px;
+    right: 12px;
+    bottom: auto;
+    width: 120px;
+    height: 6px;
+  }
+
+  /* Left rail: Herr Müller under the timebox. */
+  .mueller {
+    top: 104px;
+    bottom: auto;
+    left: 10px;
+    width: 118px;
+    padding: 6px;
+  }
+
+  /* Minimap under the right rail. */
+  .minimap {
+    top: 150px;
+    right: 10px;
+    left: auto;
+    bottom: auto;
+    width: 104px;
+    height: 116px;
+  }
+
+  /* Pads: two per corner, no overlap from 360 px wide up. */
+  .ps-pad {
+    width: 80px;
+    height: 80px;
+    bottom: 16px;
+  }
+  .ps-pad--left {
+    left: 14px;
+  }
+  .ps-pad--right {
+    left: 102px;
+  }
+  .ps-pad--square {
+    right: 102px;
+  }
+  .ps-pad--cross {
+    right: 14px;
+  }
+}

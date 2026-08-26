@@ -1,0 +1,216 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FLEET, type Car } from './data/fleet';
+import { Game, type HudState, type LapResult } from './game/Game';
+import Menu from './ui/Menu';
+import Garage from './ui/Garage';
+import Hud from './ui/Hud';
+import Ceremony from './ui/Ceremony';
+import TouchControls from './ui/TouchControls';
+
+type Phase = 'menu' | 'garage' | 'driving';
+
+const EMPTY_HUD: HudState = {
+  phase: 'approach',
+  speedKmh: 0,
+  rpmRatio: 0,
+  gear: 1,
+  lapTime: 0,
+  bestLap: null,
+  lastLap: null,
+  sectionName: 'Approach · Burgstrasse',
+  distance: 0,
+  lapLength: 0,
+  offTrack: false,
+  gripUsage: 0,
+  lateralG: 0,
+  countdown: 3.2,
+  delta: null,
+  sectors: [],
+  contacts: 0,
+  progress: 0,
+  carPos: { x: 0, z: 0 },
+  ghostPos: null,
+  approachRemaining: 870,
+  damage: 0,
+  damageCost: 0,
+  muellerMood: 'idle',
+  muellerLine: 'Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.',
+  reversing: false,
+};
+
+export default function App() {
+  const [phase, setPhase] = useState<Phase>('menu');
+  const [car, setCar] = useState<Car>(FLEET[5]);
+  const [assists, setAssists] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [hud, setHud] = useState<HudState>(EMPTY_HUD);
+  const [lapResult, setLapResult] = useState<LapResult | null>(null);
+  const [isTouch, setIsTouch] = useState(false);
+  const [gameReady, setGameReady] = useState(false);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gameRef = useRef<Game | null>(null);
+  // The HUD updates every frame; batching through rAF keeps React out of the
+  // hot loop instead of re-rendering 60 times a second.
+  const hudFrame = useRef(0);
+
+  useEffect(() => {
+    setIsTouch(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'driving' || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    let pending: HudState | null = null;
+
+    const game = new Game(canvas, car, {
+      onHud(state) {
+        // Copy, because Game reuses its telemetry object between frames.
+        pending = { ...state, sectors: [...state.sectors] };
+        if (!hudFrame.current) {
+          hudFrame.current = requestAnimationFrame(() => {
+            hudFrame.current = 0;
+            if (pending) setHud(pending);
+          });
+        }
+      },
+      onLapComplete(result) {
+        setLapResult(result);
+        game.setPaused(true);
+      },
+    });
+
+    gameRef.current = game;
+    // Dev-only handle so the running simulation can be inspected from the console.
+    if (import.meta.env.DEV) (window as unknown as { __game?: Game }).__game = game;
+    game.setAssists(assists);
+    game.setMuted(muted);
+    game.start();
+    setGameReady(true);
+
+    const resize = () => game.resize(canvas.clientWidth, canvas.clientHeight);
+    resize();
+    window.addEventListener('resize', resize);
+    game.input.onPause = () => setPaused((p) => !p);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      if (hudFrame.current) cancelAnimationFrame(hudFrame.current);
+      hudFrame.current = 0;
+      game.dispose();
+      gameRef.current = null;
+      setGameReady(false);
+    };
+    // The game owns its own loop; only a car or phase change rebuilds it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, car]);
+
+  useEffect(() => {
+    gameRef.current?.setAssists(assists);
+  }, [assists]);
+
+  useEffect(() => {
+    gameRef.current?.setMuted(muted);
+  }, [muted]);
+
+  useEffect(() => {
+    // The ceremony pauses the game itself; do not fight it.
+    if (lapResult) return;
+    gameRef.current?.setPaused(paused);
+  }, [paused, lapResult]);
+
+  const startDriving = useCallback(() => {
+    setHud(EMPTY_HUD);
+    setLapResult(null);
+    setPaused(false);
+    setPhase('driving');
+  }, []);
+
+  const backToGarage = useCallback(() => {
+    setLapResult(null);
+    setPaused(false);
+    setPhase('garage');
+  }, []);
+
+  const continueDriving = useCallback(() => {
+    setLapResult(null);
+    setPaused(false);
+    gameRef.current?.setPaused(false);
+  }, []);
+
+  if (phase === 'menu') {
+    return (
+      <div className="app">
+        <Menu
+          onGarage={() => setPhase('garage')}
+          onQuickStart={startDriving}
+          carLabel={`${car.brand} ${car.model}`}
+        />
+      </div>
+    );
+  }
+
+  if (phase === 'garage') {
+    return (
+      <div className="app">
+        <Garage
+          selected={car}
+          onSelect={setCar}
+          onStart={startDriving}
+          onBack={() => setPhase('menu')}
+          assists={assists}
+          onAssistsChange={setAssists}
+          muted={muted}
+          onMutedChange={setMuted}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <div className="screen drive">
+        <canvas ref={canvasRef} className="drive__canvas" />
+        <Hud
+          hud={hud}
+          onPause={() => setPaused(true)}
+          onSkipApproach={() => gameRef.current?.skipApproach()}
+        />
+        {gameReady && gameRef.current && (
+          <TouchControls input={gameRef.current.input} visible={isTouch && !paused && !lapResult} />
+        )}
+
+        {paused && !lapResult && (
+          <div className="overlay">
+            <div className="dialog">
+              <h2>Paused</h2>
+              <p>
+                {car.brand} {car.model} · Home Circuit Nordschleife
+              </p>
+              <div className="dialog__actions">
+                <button className="btn-primary" onClick={() => setPaused(false)}>
+                  Resume
+                </button>
+                <button className="btn-ghost" onClick={() => setMuted((m) => !m)}>
+                  {muted ? 'Sound on' : 'Sound off'}
+                </button>
+                <button className="btn-ghost" onClick={() => setAssists((a) => !a)}>
+                  Driver aids {assists ? 'off' : 'on'}
+                </button>
+                <button className="btn-ghost" onClick={backToGarage}>
+                  Garage
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {lapResult && (
+          <Ceremony car={car} result={lapResult} onContinue={continueDriving} onGarage={backToGarage} />
+        )}
+      </div>
+    </div>
+  );
+}
