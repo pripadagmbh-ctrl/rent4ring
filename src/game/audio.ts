@@ -12,7 +12,14 @@ export class EngineAudio {
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
   private started = false;
+  /** Engine damp — set for pause AND user mute. */
   private muted = false;
+  /**
+   * The user's own sound toggle, tracked separately: pausing the game damps
+   * the engine but must not swallow one-shot SFX like the podium fanfare.
+   */
+  userMuted = false;
+  private sfx: GainNode | null = null;
 
   constructor(private car: Car) {}
 
@@ -30,6 +37,13 @@ export class EngineAudio {
     master.gain.value = 0.0001;
     master.connect(ctx.destination);
     this.master = master;
+
+    // One-shot effects bypass the master so a paused (damped) engine cannot
+    // silence them; the user's mute still gates them at the call sites.
+    const sfx = ctx.createGain();
+    sfx.gain.value = 0.9;
+    sfx.connect(ctx.destination);
+    this.sfx = sfx;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -81,7 +95,8 @@ export class EngineAudio {
     this.noise = noise;
     this.noiseGain = noiseGain;
 
-    master.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.4);
+    // A drive started while muted must stay muted (H7).
+    master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
 
   /**
@@ -148,10 +163,14 @@ export class EngineAudio {
     osc.stop(now + 0.32);
   }
 
-  /** Celebratory fanfare for the podium. */
+  /**
+   * Celebratory fanfare for the podium. Runs on the SFX bus: the ceremony
+   * pauses the game the moment the lap completes, and the pause damp on the
+   * master used to swallow the fanfare before its first note landed.
+   */
   fanfare(): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted) return;
+    if (!ctx || !this.sfx || this.userMuted) return;
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const t = ctx.currentTime + i * 0.16;
@@ -162,7 +181,7 @@ export class EngineAudio {
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-      osc.connect(gain).connect(this.master!);
+      osc.connect(gain).connect(this.sfx!);
       osc.start(t);
       osc.stop(t + 0.45);
     });
