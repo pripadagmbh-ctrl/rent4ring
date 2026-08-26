@@ -120,7 +120,8 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   const vergeMat = new THREE.MeshStandardMaterial({ color: 0x7d7f76, roughness: 1 });
   const grassMat = new THREE.MeshStandardMaterial({ color: 0x577a3c, roughness: 1 });
   const outerMat = new THREE.MeshStandardMaterial({ color: 0x50713a, roughness: 1 });
-  disposables.push(asphaltMat, vergeMat, grassMat, outerMat);
+  // Material.dispose() does not free its textures — push the map separately.
+  disposables.push(asphaltMat.map!, asphaltMat, vergeMat, grassMat, outerMat);
 
   const rib = (
     inner: (i: number) => THREE.Vector3,
@@ -174,7 +175,8 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
   });
   const kerbMat = new THREE.MeshStandardMaterial({ color: 0x9a9a94, roughness: 1 });
   const grassMat = new THREE.MeshStandardMaterial({ color: 0x51733a, roughness: 1 });
-  disposables.push(asphaltMat, kerbMat, grassMat);
+  // Material.dispose() does not free its textures — push the map separately.
+  disposables.push(asphaltMat.map!, asphaltMat, kerbMat, grassMat);
 
   const rib = (
     inner: (i: number) => THREE.Vector3,
@@ -417,10 +419,11 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
 
   // Wordmark above the doors.
   const signGeo = new THREE.BoxGeometry(11, 2.4, 0.18);
-  const sign = new THREE.Mesh(signGeo, logoMaterial());
+  const signMat = logoMaterial();
+  const sign = new THREE.Mesh(signGeo, signMat);
   sign.position.set(0, 5.1, 5.6);
   group.add(sign);
-  disposables.push(signGeo, sign.material as THREE.Material);
+  disposables.push(signGeo, signMat.map!, signMat);
 
   root.add(group);
 }
@@ -602,11 +605,12 @@ function buildDistanceMarkers(track: Track, root: THREE.Group, disposables: { di
     dummy.updateMatrix();
     poles.push(dummy.matrix.clone());
 
-    const sign = new THREE.Mesh(signGeo, textMaterial(`${(targetS / 1000).toFixed(1)} km`));
+    const signMat = textMaterial(`${(targetS / 1000).toFixed(1)} km`);
+    const sign = new THREE.Mesh(signGeo, signMat);
     sign.position.set(pos.x, pos.y + 2.3, pos.z);
     sign.rotation.set(0, yaw + Math.PI / 2, 0);
     root.add(sign);
-    disposables.push(sign.material as THREE.Material);
+    disposables.push(signMat.map!, signMat);
   }
 
   instance(poleGeo, poleMat, poles, root);
@@ -621,7 +625,7 @@ function buildStartLine(track: Track, root: THREE.Group, disposables: { dispose(
   const w = p.halfWidth * 2;
   const stripGeo = new THREE.PlaneGeometry(w, 1.6);
   const stripMat = new THREE.MeshBasicMaterial({ map: chequerTexture(), transparent: true });
-  disposables.push(stripGeo, stripMat);
+  disposables.push(stripGeo, stripMat.map!, stripMat);
   const strip = new THREE.Mesh(stripGeo, stripMat);
   strip.rotation.x = -Math.PI / 2;
   strip.position.y = 0.04;
@@ -643,10 +647,11 @@ function buildStartLine(track: Track, root: THREE.Group, disposables: { dispose(
   group.add(beam);
 
   const boardGeo = new THREE.BoxGeometry(7.4, 2.1, 0.12);
-  const board = new THREE.Mesh(boardGeo, logoMaterial());
+  const boardMat = logoMaterial();
+  const board = new THREE.Mesh(boardGeo, boardMat);
   board.position.set(0, 8.8, 0);
   group.add(board);
-  disposables.push(boardGeo, board.material as THREE.Material);
+  disposables.push(boardGeo, boardMat.map!, boardMat);
 
   root.add(group);
 }
@@ -863,11 +868,12 @@ function buildEntrance(
   // Sign over the slip road.
   const signGeo = new THREE.BoxGeometry(4.6, 1.3, 0.12);
   disposables.push(signGeo);
-  const sign = new THREE.Mesh(signGeo, textMaterial('ZUFAHRT', 0x0f4a8a));
+  const signMat = textMaterial('ZUFAHRT', 0x0f4a8a);
+  const sign = new THREE.Mesh(signGeo, signMat);
   sign.position.set(rail + 3.2, 3.7, 0);
   sign.rotation.y = Math.PI / 2;
   group.add(sign);
-  disposables.push(sign.material as THREE.Material);
+  disposables.push(signMat.map!, signMat);
 
   root.add(group);
 }
@@ -950,11 +956,12 @@ function buildPetrolStation(root: THREE.Group, disposables: { dispose(): void }[
   const totemGeo = new THREE.BoxGeometry(3, 4, 0.4);
   const totemPostGeo = new THREE.BoxGeometry(0.5, 3, 0.5);
   disposables.push(totemGeo, totemPostGeo);
-  const totem = new THREE.Mesh(totemGeo, textMaterial('TOTAL', 0x1b3f8f, 0xffffff));
+  const totemMat = textMaterial('TOTAL', 0x1b3f8f, 0xffffff);
+  const totem = new THREE.Mesh(totemGeo, totemMat);
   totem.position.set(15, 4.5, 8);
   totem.rotation.y = -0.4;
   group.add(totem);
-  disposables.push(totem.material as THREE.Material);
+  disposables.push(totemMat.map!, totemMat);
   const totemPost = new THREE.Mesh(totemPostGeo, grey);
   totemPost.position.set(15, 1.5, 8);
   group.add(totemPost);
