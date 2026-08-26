@@ -97,11 +97,13 @@ export const FLEET: Car[] = [
     id: 'gr-supra',
     brand: 'Toyota',
     model: 'GR Supra',
-    ps: 258,
+    // 3.0-litre straight-six variant — matches the blurb, kerb weight and
+    // final drive already in this record (the 258 PS figures were the 2.0).
+    ps: 340,
     massKg: 1480,
     drivetrain: 'RWD',
-    torqueNm: 400,
-    zeroToHundred: 5.2,
+    torqueNm: 500,
+    zeroToHundred: 4.3,
     topSpeedKmh: 250,
     gearRatios: [5.0, 3.2, 2.14, 1.72, 1.31, 1.0, 0.82, 0.64],
     finalDrive: 3.15,
