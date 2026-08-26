@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLEET, type Car } from './data/fleet';
+import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult } from './game/Game';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
@@ -48,6 +49,8 @@ export default function App() {
   const [lapResult, setLapResult] = useState<LapResult | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [gameReady, setGameReady] = useState(false);
+  /** The send-off Herr Müller gave in the garage, carried into the drive. */
+  const [departureLine, setDepartureLine] = useState<MuellerLine | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
@@ -66,6 +69,7 @@ export default function App() {
     let pending: HudState | null = null;
 
     const game = new Game(canvas, car, {
+      departureLine,
       onHud(state) {
         // Copy, because Game reuses its telemetry object between frames.
         pending = { ...state, sectors: [...state.sectors] };
@@ -121,7 +125,9 @@ export default function App() {
     gameRef.current?.setPaused(paused);
   }, [paused, lapResult]);
 
-  const startDriving = useCallback(() => {
+  const startDriving = useCallback((farewell?: MuellerLine) => {
+    // Straight from the menu there is no garage send-off; the game picks one.
+    setDepartureLine(farewell ?? null);
     setHud(EMPTY_HUD);
     setLapResult(null);
     setPaused(false);
@@ -145,7 +151,7 @@ export default function App() {
       <div className="app">
         <Menu
           onGarage={() => setPhase('garage')}
-          onQuickStart={startDriving}
+          onQuickStart={() => startDriving()}
           carLabel={`${car.brand} ${car.model}`}
         />
       </div>

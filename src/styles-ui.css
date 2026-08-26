@@ -248,30 +248,31 @@
 .showroom__mueller {
   position: absolute;
   right: 8px;
-  bottom: 96px;
+  bottom: 92px;
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   pointer-events: none;
   filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.55));
 }
 
 .showroom__mueller-fig {
-  width: clamp(110px, 15vw, 170px);
+  width: clamp(128px, 17vw, 190px);
   flex: none;
 }
 
 .showroom__mueller-speech {
-  max-width: 200px;
+  max-width: 232px;
   background: #fff;
   color: #10141a;
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.4;
+  border-radius: 13px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.42;
   font-weight: 500;
   margin-bottom: 58px;
   position: relative;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
 
 .showroom__mueller-speech::after {
@@ -282,6 +283,56 @@
   border: 8px solid transparent;
   border-left-color: #fff;
   border-right: 0;
+}
+
+.showroom__mueller-who {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 3px;
+}
+
+/* Keyed on the text in the markup, so every new line fades in as he says it. */
+.showroom__mueller-text {
+  display: block;
+  animation: mueller-say 0.34s ease-out both;
+}
+
+@keyframes mueller-say {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* The send-off: he steps forward as the driver leaves. */
+.showroom__mueller--leaving .showroom__mueller-speech {
+  background: var(--gold);
+}
+
+.showroom__mueller--leaving .showroom__mueller-speech::after {
+  border-left-color: var(--gold);
+}
+
+.showroom__mueller--leaving .showroom__mueller-who {
+  color: #6a4a00;
+}
+
+.showroom__mueller--leaving {
+  animation: mueller-step-up 0.45s ease-out both;
+}
+
+@keyframes mueller-step-up {
+  from {
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    transform: translateY(0) scale(1.04);
+  }
 }
 
 .garage__side {
@@ -651,6 +702,155 @@
   }
 }
 
+/* ----------------------------------------------------- gestures (arms)
+   These sit after the mood rules on purpose. A gesture is an explicit
+   instruction and has to beat whatever the mood was doing with his arms, and
+   equal-specificity rules are settled by source order. Each gesture therefore
+   states BOTH arms, so nothing is left animating from the mood underneath. */
+.gorilla--g-wave .gorilla__arm-right,
+.gorilla--g-point .gorilla__arm-right,
+.gorilla--g-thumb .gorilla__arm-right,
+.gorilla--g-present .gorilla__arm-right,
+.gorilla--g-wave .gorilla__arm-left,
+.gorilla--g-point .gorilla__arm-left,
+.gorilla--g-thumb .gorilla__arm-left,
+.gorilla--g-present .gorilla__arm-left {
+  animation: none;
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Waving the driver off: arm out and rocking at the elbow. */
+.gorilla--g-wave .gorilla__arm-right {
+  animation: mueller-wave 0.86s ease-in-out infinite;
+}
+
+.gorilla--g-wave .gorilla__arm-left {
+  transform: rotate(5deg);
+}
+
+@keyframes mueller-wave {
+  0%,
+  100% {
+    transform: rotate(-95deg);
+  }
+  50% {
+    transform: rotate(-118deg);
+  }
+}
+
+/* Pointing at the car, which stands to his left on the showroom floor. */
+.gorilla--g-point .gorilla__arm-left {
+  animation: mueller-point 2.1s ease-in-out infinite;
+}
+
+.gorilla--g-point .gorilla__arm-right {
+  transform: rotate(-6deg);
+}
+
+@keyframes mueller-point {
+  0%,
+  100% {
+    transform: rotate(92deg);
+  }
+  50% {
+    transform: rotate(99deg);
+  }
+}
+
+/* Fist up — his version of a thumbs up. */
+.gorilla--g-thumb .gorilla__arm-right {
+  animation: mueller-thumb 1.5s ease-in-out infinite;
+}
+
+.gorilla--g-thumb .gorilla__arm-left {
+  transform: rotate(5deg);
+}
+
+@keyframes mueller-thumb {
+  0%,
+  100% {
+    transform: rotate(-108deg);
+  }
+  50% {
+    transform: rotate(-114deg) translateY(-3px);
+  }
+}
+
+/* Presenting the car: both arms opened out, showman style. */
+.gorilla--g-present .gorilla__arm-left {
+  animation: mueller-present-l 2.8s ease-in-out infinite;
+}
+
+.gorilla--g-present .gorilla__arm-right {
+  animation: mueller-present-r 2.8s ease-in-out infinite;
+}
+
+@keyframes mueller-present-l {
+  0%,
+  100% {
+    transform: rotate(48deg);
+  }
+  50% {
+    transform: rotate(58deg);
+  }
+}
+
+@keyframes mueller-present-r {
+  0%,
+  100% {
+    transform: rotate(-48deg);
+  }
+  50% {
+    transform: rotate(-58deg);
+  }
+}
+
+/* ----------------------------------------------------------- talking
+   The jaw works while one of his lines is on screen, so he reads as saying it
+   rather than wearing it on a placard. */
+.gorilla--talking .mouth {
+  transform-box: view-box;
+  transform-origin: 130px 62px;
+  animation: mueller-talk 0.4s ease-in-out infinite;
+}
+
+@keyframes mueller-talk {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+  }
+  50% {
+    transform: scaleY(1.28);
+  }
+}
+
+.gorilla--talking .gorilla__head {
+  transform-box: view-box;
+  transform-origin: 130px 72px;
+  animation: mueller-nod 3.1s ease-in-out infinite;
+}
+
+@keyframes mueller-nod {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  32% {
+    transform: rotate(-2.2deg);
+  }
+  64% {
+    transform: rotate(1.6deg);
+  }
+}
+
+/* Someone who prefers less movement gets a still Herr Müller. */
+@media (prefers-reduced-motion: reduce) {
+  .gorilla,
+  .gorilla * {
+    animation: none !important;
+  }
+}
+
 /* --------------------------------------------------------- pause button */
 .hud__pause {
   position: absolute;
@@ -751,30 +951,60 @@
   .garage__layout {
     grid-template-columns: 1fr;
   }
-  .showroom__canvas {
-    height: 340px;
-  }
+
+  /* Phone layout: nothing overlays the car any more. On a narrow screen the
+     nameplate, the data strip and Herr Müller between them buried the very
+     thing you came to look at, so they leave the overlay and stack under the
+     canvas instead. That also earns the blurb its place back. */
   .showroom {
-    min-height: 340px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
-  /* On a phone the description would sit right on top of the car. */
-  .showroom__blurb {
-    display: none;
+  .showroom__nameplate {
+    order: 1;
+    position: static;
+    padding: 12px 14px 7px;
+    text-shadow: none;
+  }
+  .showroom__canvas {
+    order: 2;
+    height: 268px;
   }
   .showroom__plate {
-    padding: 20px 14px 10px;
+    order: 3;
+    position: static;
+    background: none;
+    padding: 12px 14px;
+    border-top: 1px solid var(--line);
+  }
+  .showroom__blurb {
+    max-width: none;
+    margin-bottom: 12px;
+  }
+  .showroom__specs {
+    gap: 14px 20px;
+  }
+  /* Dragging to rotate is discoverable enough by touch; the label would only
+     land back on top of something. */
+  .showroom__hint {
+    display: none;
   }
   .showroom__mueller {
-    bottom: 64px;
+    order: 4;
+    position: static;
+    gap: 6px;
+    padding: 0 12px 12px;
+    filter: none;
   }
   .showroom__mueller-fig {
-    width: 92px;
+    width: 96px;
   }
   .showroom__mueller-speech {
-    max-width: 150px;
-    font-size: 10.5px;
-    padding: 8px 9px;
-    margin-bottom: 34px;
+    flex: 1;
+    max-width: none;
+    margin-bottom: 8px;
+    font-size: 12px;
   }
 }
 

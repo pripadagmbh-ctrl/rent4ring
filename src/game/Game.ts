@@ -14,6 +14,7 @@ import { buildCarMesh, type CarMesh } from './carMesh';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
+import { farewellLine, type MuellerLine } from '../data/muellerLines';
 
 export interface SectorSplit {
   name: string;
@@ -103,6 +104,11 @@ export interface GameCallbacks {
   onHud(state: HudState): void;
   onLapComplete(result: LapResult): void;
   onArrived?(): void;
+  /**
+   * The send-off Herr Müller gave in the garage. Starting straight from the
+   * menu skips the garage, so the drive picks its own when this is absent.
+   */
+  departureLine?: MuellerLine | null;
 }
 
 export class Game {
@@ -280,7 +286,14 @@ export class Game {
     // Start on the driveway at Burgstraße 1.
     this.vehicle.placeOnTrack(this.approach, 0, 0);
     this.lastIndex = 0;
-    this.moodLine = "Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.";
+
+    // Open on Herr Müller's send-off, so the drive begins where the garage
+    // left off. A straight-from-the-menu start has none, so pick one here.
+    const sendOff = callbacks.departureLine ?? farewellLine(car.id);
+    this.mood = sendOff.mood;
+    this.moodLine = sendOff.text;
+    // Hold it past the countdown, or the resting commentary talks over him.
+    this.moodHold = 6;
 
     this.input.onCameraToggle = () => this.cycleCamera();
     this.input.onReset = () => this.recover();
