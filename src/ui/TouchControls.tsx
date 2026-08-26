@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { InputManager } from '../game/input';
 
 interface Props {
@@ -11,6 +12,18 @@ interface Props {
  * and the car backs up, just like holding the brake on a pad.
  */
 export default function TouchControls({ input, visible }: Props) {
+  // Hiding or unmounting the pads (pause, ceremony) swallows any pending
+  // pointerup for a still-held pad — drop the touch state, otherwise the car
+  // keeps full throttle on its own after Resume/Continue.
+  useEffect(() => {
+    return () => {
+      input.touch.throttle = 0;
+      input.touch.brake = 0;
+      input.touch.steer = 0;
+      input.touchActive = false;
+    };
+  }, [input, visible]);
+
   if (!visible) return null;
 
   const bind = (apply: (down: boolean) => void) => ({
