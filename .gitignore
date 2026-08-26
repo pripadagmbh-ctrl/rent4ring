@@ -1,5 +1,22 @@
+# Abhängigkeiten — werden per `npm install` wiederhergestellt
 node_modules/
+
+# Build-Artefakte — jederzeit per Build reproduzierbar
 dist/
 scripts/dist/
-*.log
+
+# Vite-Cache
+.vite/
+
+# Betriebssystem-Müll
+Thumbs.db
 .DS_Store
+
+# Logs
+*.log
+
+# Interne Arbeitsdokumente (Review-Prozess) — nicht Teil des veroeffentlichten Projekts
+KONTEXT.md
+PRUEFPLAN.md
+REVIEW.md
+reviews/
