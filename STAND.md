@@ -1,8 +1,24 @@
-# STAND.md — Arbeitsstand, Fortsetzung folgt
+# STAND.md — Arbeitsstand
 
-Stand: 26.08.2026, Branch `claude/rent4ring-review-0377f5`.
-Zwischenstand-Upload vor Erreichen des Nutzungslimits — die Arbeit ist **nicht**
-abgeschlossen. Diese Datei sagt, wo weitergemacht wird.
+Stand: 26.08.2026, Branch `claude/rent4ring-review-0377f5`, per PR #1 nach `main`
+gemergt und über den Pages-Workflow live gestellt. Diese Datei sagt, was erledigt
+ist und wo weitergemacht wird.
+
+## Live-Deployment
+
+`main` deployt automatisch per `.github/workflows/deploy.yml` auf GitHub Pages:
+<https://pripadagmbh-ctrl.github.io/rent4ring/>
+
+## Merge mit paralleler Session (wichtig fürs Verständnis der Historie)
+
+Auf `main` hatte eine **zweite, parallele Session** dieselben REVIEW.md-Befunde
+unabhängig umgesetzt (Commits `98f17d1`…`8e2fa62`: H1–H4, H7–H13, M01, M11, M17,
+N01, N04, N07, N21). Der Merge-Commit `60fc97b` vereint beide Stände und
+dokumentiert pro Datei, welche Implementierung gewann und warum. Kurzfassung:
+TouchControls/Ceremony/package.json/.gitignore von dort (M01, M17 samt
+`@types/node` — behebt O1 aus OFFEN.md), Game/audio/Hud/simulate/styles von hier
+(Träger von Müller-Feature, Ausfahrt, H12/M15). `tsc --noEmit` ist seither
+komplett grün.
 
 ## Erledigt: alle 13 „hoch"-Befunde aus REVIEW.md
 
