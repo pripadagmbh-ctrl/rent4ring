@@ -23,7 +23,7 @@ const EMPTY_HUD: HudState = {
   offTrack: false,
   gripUsage: 0,
   lateralG: 0,
-  countdown: 3.2,
+  countdown: 3,
   delta: null,
   sectors: [],
   contacts: 0,

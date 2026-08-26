@@ -12,8 +12,10 @@ interface Props {
 export default function Hud({ hud, onPause, onSkipApproach }: Props) {
   const revPct = Math.min(1, Math.max(0, hud.rpmRatio)) * 100;
   const atLimit = hud.rpmRatio > 0.94;
+  // One label per full second of hold; "GO" only once the car is actually
+  // released (the count has crossed zero and runs a short negative tail).
   const countdownLabel =
-    hud.countdown === null ? null : hud.countdown > 3 ? '3' : hud.countdown > 2 ? '2' : hud.countdown > 1 ? '1' : 'GO';
+    hud.countdown === null ? null : hud.countdown > 2 ? '3' : hud.countdown > 1 ? '2' : hud.countdown > 0 ? '1' : 'GO';
   const onApproach = hud.phase === 'approach';
 
   return (
