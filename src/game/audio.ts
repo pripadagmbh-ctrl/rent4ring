@@ -11,8 +11,13 @@ export class EngineAudio {
   private noise: AudioBufferSourceNode | null = null;
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
+  /** Bus for one-shot SFX (fanfare) that must survive the pause-mute. */
+  private sfx: GainNode | null = null;
   private started = false;
+  /** Combined pause-or-user mute, driving the engine master. */
   private muted = false;
+  /** The user's actual mute toggle, driving the SFX bus. */
+  private userMuted = false;
 
   constructor(private car: Car) {}
 
@@ -30,6 +35,13 @@ export class EngineAudio {
     master.gain.value = 0.0001;
     master.connect(ctx.destination);
     this.master = master;
+
+    // The fanfare bypasses the master: the ceremony pauses the game in the
+    // same moment it plays, and the pause-mute would swallow it otherwise.
+    const sfx = ctx.createGain();
+    sfx.gain.value = this.userMuted ? 0.0001 : 1;
+    sfx.connect(ctx.destination);
+    this.sfx = sfx;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -81,7 +93,7 @@ export class EngineAudio {
     this.noise = noise;
     this.noiseGain = noiseGain;
 
-    master.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.4);
+    master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
 
   /**
@@ -151,7 +163,7 @@ export class EngineAudio {
   /** Celebratory fanfare for the podium. */
   fanfare(): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted) return;
+    if (!ctx || !this.sfx || this.userMuted) return;
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const t = ctx.currentTime + i * 0.16;
@@ -162,7 +174,7 @@ export class EngineAudio {
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-      osc.connect(gain).connect(this.master!);
+      osc.connect(gain).connect(this.sfx!);
       osc.start(t);
       osc.stop(t + 0.45);
     });
@@ -172,6 +184,14 @@ export class EngineAudio {
     this.muted = muted;
     if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(muted ? 0.0001 : 0.35, this.ctx.currentTime, 0.1);
+    }
+  }
+
+  /** The user's mute toggle alone — pause must not silence the SFX bus. */
+  setUserMuted(muted: boolean): void {
+    this.userMuted = muted;
+    if (this.sfx && this.ctx) {
+      this.sfx.gain.setTargetAtTime(muted ? 0.0001 : 1, this.ctx.currentTime, 0.05);
     }
   }
 

@@ -313,6 +313,7 @@ export class Game {
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.audio.setMuted(muted || this.paused);
+    this.audio.setUserMuted(muted);
   }
 
   setAssists(on: boolean): void {
