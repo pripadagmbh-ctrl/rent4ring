@@ -27,6 +27,7 @@ function driveLap(carIndex: number, assists: boolean) {
   let lastIndex = vehicle.trackIndex;
   let topSpeed = 0;
   let contacts = 0;
+  let wasInContact = false;
   let offTrackTime = 0;
   let maxLateral = 0;
   let vTarget = 0;
@@ -122,7 +123,9 @@ function driveLap(carIndex: number, assists: boolean) {
     const telemetry = vehicle.step(dt, { throttle, brake, steer, handbrake: false }, track);
     time += dt;
     topSpeed = Math.max(topSpeed, telemetry.speedKmh);
-    if (telemetry.contact) contacts++;
+    // Edge-count, matching Game.ts: one touch = one contact, however long it grinds.
+    if (telemetry.contact && !wasInContact) contacts++;
+    wasInContact = telemetry.contact;
     if (telemetry.offTrack) offTrackTime += dt;
 
     // A human would press R; do the same so one bad corner does not skew the run.

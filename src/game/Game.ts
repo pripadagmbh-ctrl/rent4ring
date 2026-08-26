@@ -142,7 +142,7 @@ export class Game {
 
   // ------------------------------------------------------------ lap state
   phase: Phase = 'approach';
-  private countdown: number | null = 3.2;
+  private countdown: number | null = 3.0;
   private lapTime = 0;
   /** Index progress since joining the circuit; the line is crossed at `toLine`. */
   private joinProgress = 0;
@@ -303,6 +303,7 @@ export class Game {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
+    this.audio.userMuted = muted;
     this.audio.setMuted(muted || this.paused);
   }
 
@@ -396,9 +397,7 @@ export class Game {
 
     if (this.countdown !== null) {
       this.countdown -= dt;
-      if (this.countdown <= 0) {
-        this.countdown = null;
-      } else {
+      if (this.countdown > 0) {
         // Hold the car on the spot. The driver may build revs, but the car must
         // not creep or roll back while the lights are still on.
         const held = { throttle: input.throttle, brake: 0, steer: 0, handbrake: true };
@@ -408,6 +407,9 @@ export class Game {
         this.vehicle.yawRate = 0;
         return;
       }
+      // The car is free the instant the count hits zero; the negative tail
+      // keeps "GO" on screen for a moment while the launch is already live.
+      if (this.countdown <= -0.7) this.countdown = null;
     }
 
     this.telemetry = this.vehicle.step(dt, input, this.road);
@@ -429,9 +431,17 @@ export class Game {
   }
 
   // ------------------------------------------------------------- damage
+  /** Previous physics step's contact flag, for edge detection below. */
+  private wasInContact = false;
+
   private applyDamage(t: VehicleTelemetry, dt: number): void {
     void dt;
-    if (!t.contact) return;
+    // The physics reports contact per 120 Hz step; grinding along the Armco
+    // would otherwise count as 120 "hits" a second and spam the impact sound.
+    // Only the rising edge — the moment the car first touches — is an event.
+    const isNewHit = t.contact && !this.wasInContact;
+    this.wasInContact = t.contact;
+    if (!isNewHit) return;
     this.contacts++;
 
     const v = t.impactSpeed;
@@ -623,8 +633,11 @@ export class Game {
   private recordGhost(dt: number): void {
     if (this.phase !== 'timing') return;
     this.ghostSampleTimer += dt;
-    if (this.ghostSampleTimer < 0.08) return;
-    this.ghostSampleTimer = 0;
+    if (this.ghostSampleTimer < GHOST_DT) return;
+    // Carry the remainder instead of resetting to zero — a hard reset makes
+    // every interval slightly longer than GHOST_DT and the drift adds up to
+    // the ghost visibly lagging its own recorded lap after a few minutes.
+    this.ghostSampleTimer -= GHOST_DT;
     this.ghostRecording.push({
       x: this.vehicle.position.x,
       y: this.vehicle.position.y,
@@ -632,6 +645,19 @@ export class Game {
       yaw: this.vehicle.yaw,
       t: this.lapTime,
     });
+  }
+
+  /** Index of the last ghost sample at or before `t`, by binary search — no
+   *  assumption about the sample grid, so replays survive any timing drift. */
+  private ghostIndexFor(g: GhostSample[], t: number): number {
+    let lo = 0;
+    let hi = g.length - 2;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (g[mid].t <= t) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
   }
 
   private ensureGhostMesh(): void {
@@ -645,11 +671,11 @@ export class Game {
     const g = this.ghostBest;
     if (!g || g.length < 2) return null;
     if (t >= g[g.length - 1].t) return g[g.length - 1];
-    const i = Math.min(g.length - 2, Math.floor(t / 0.08));
+    const i = this.ghostIndexFor(g, t);
     const a = g[i];
     const b = g[i + 1];
     const span = b.t - a.t;
-    const f = span > 1e-6 ? (t - a.t) / span : 0;
+    const f = span > 1e-6 ? THREE.MathUtils.clamp((t - a.t) / span, 0, 1) : 0;
     return {
       x: a.x + (b.x - a.x) * f,
       y: a.y + (b.y - a.y) * f,
@@ -663,7 +689,7 @@ export class Game {
     const g = this.ghostBest;
     if (!g || g.length < 2 || this.phase !== 'timing') return null;
     const pos = this.vehicle.position;
-    const seed = Math.min(g.length - 1, Math.floor(this.lapTime / 0.08));
+    const seed = this.ghostIndexFor(g, this.lapTime);
     let best = seed;
     let bestDist = Infinity;
     for (let k = -90; k <= 90; k++) {
@@ -839,7 +865,7 @@ export class Game {
     try {
       localStorage.setItem(
         this.storageKey(),
-        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, 4000) ?? [] }),
+        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, GHOST_SAVE_CAP) ?? [] }),
       );
     } catch {
       /* storage unavailable — best lap simply will not persist */
@@ -851,10 +877,21 @@ export class Game {
       const raw = localStorage.getItem(this.storageKey());
       if (!raw) return;
       const parsed = JSON.parse(raw) as { time: number; ghost: GhostSample[] };
-      if (typeof parsed.time === 'number') this.bestLap = parsed.time;
-      if (Array.isArray(parsed.ghost) && parsed.ghost.length > 2) {
-        this.ghostBest = parsed.ghost;
-        this.ensureGhostMesh();
+      if (typeof parsed.time === 'number' && Number.isFinite(parsed.time)) this.bestLap = parsed.time;
+      if (Array.isArray(parsed.ghost)) {
+        const clean = parsed.ghost.filter(
+          (s) =>
+            s &&
+            Number.isFinite(s.x) &&
+            Number.isFinite(s.y) &&
+            Number.isFinite(s.z) &&
+            Number.isFinite(s.yaw) &&
+            Number.isFinite(s.t),
+        );
+        if (clean.length > 2) {
+          this.ghostBest = clean;
+          this.ensureGhostMesh();
+        }
       }
     } catch {
       /* corrupt entry — ignore and start fresh */
@@ -864,6 +901,16 @@ export class Game {
 
 /** Direction the sun sits from the car; matches the fixed light in the sky. */
 const SUN_OFFSET = new THREE.Vector3(-160, 240, 110);
+
+/** Ghost sample interval, seconds. */
+const GHOST_DT = 0.08;
+
+/**
+ * Persisted-ghost cap: 12,000 samples at GHOST_DT is 16 minutes — comfortably
+ * past the slowest sensible lap, where the old 4,000 cut a 10-minute lap off
+ * mid-circuit. Roughly 700 KB of JSON, well inside the localStorage budget.
+ */
+const GHOST_SAVE_CAP = 12000;
 
 const MOOD_PRIORITY: Record<Mood, number> = {
   idle: 0,
