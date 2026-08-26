@@ -1,15 +1,16 @@
 {
   "name": "rent4ring-home-circuit",
   "version": "1.0.0",
-  "description": "Rent4Ring — fahre die Racingtools der Flotte über den Home Circuit (Nordschleife)",
+  "description": "Rent4Ring \u2014 fahre die Racingtools der Flotte \u00fcber den Home Circuit (Nordschleife)",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "build:track": "node scripts/build-track.mjs"
   },
   "devDependencies": {
+    "@types/node": "^26.3.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.0",
