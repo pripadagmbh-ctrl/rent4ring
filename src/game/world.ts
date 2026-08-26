@@ -1,5 +1,18 @@
 import * as THREE from 'three';
 import type { Approach, RoadPath, Track } from './track';
+import {
+  CLOSED_DOOR_X,
+  DIP,
+  LINK,
+  OPEN_DOOR,
+  PLATEAU,
+  RAMP,
+  ROAD_Y,
+  SHED,
+  YARD,
+  YARD_Y,
+  homeBaseFrame,
+} from './departure';
 
 export interface WorldHandles {
   root: THREE.Group;
@@ -318,75 +331,128 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
 // The Rent4Ring base at Burgstraße 1 — where every drive starts
 // =====================================================================
 function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dispose(): void }[]): void {
-  const p = approach.at(0);
-  const yaw = Math.atan2(p.tangent.x, p.tangent.z);
+  const frame = homeBaseFrame(approach);
   const group = new THREE.Group();
-  // The yard sits in a dip below the road, so the building is set down and the
-  // forecourt ramps up to the kerb.
-  const DIP = 1.9;
-  group.position
-    .copy(p.pos)
-    .addScaledVector(p.normal, p.halfWidth + 9)
-    .addScaledVector(p.tangent, -4);
-  group.position.y -= DIP;
-  group.rotation.y = yaw;
+  group.position.copy(frame.position);
+  group.rotation.y = frame.yaw;
 
-  // Sunken forecourt with a ramp back up to the road.
-  const yardGeo = new THREE.BoxGeometry(26, 0.3, 20);
-  const yardMat = new THREE.MeshStandardMaterial({ color: 0x74777c, roughness: 0.95 });
-  disposables.push(yardGeo, yardMat);
-  const yard = new THREE.Mesh(yardGeo, yardMat);
-  yard.position.set(0, 0, 3);
-  group.add(yard);
+  const push = <T extends { dispose(): void }>(x: T): T => {
+    disposables.push(x);
+    return x;
+  };
+  /** Slab helper — everything here is boxes on a local grid. */
+  const slab = (
+    mat: THREE.Material,
+    minX: number,
+    maxX: number,
+    minZ: number,
+    maxZ: number,
+    top: number,
+    thickness: number,
+  ): THREE.Mesh => {
+    const geo = push(new THREE.BoxGeometry(maxX - minX, thickness, maxZ - minZ));
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((minX + maxX) / 2, top - thickness / 2, (minZ + maxZ) / 2);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return mesh;
+  };
 
-  const rampGeo = new THREE.BoxGeometry(9, 0.3, 7);
-  disposables.push(rampGeo);
-  const ramp = new THREE.Mesh(rampGeo, yardMat);
-  ramp.position.set(0, DIP / 2, 14);
-  ramp.rotation.x = -Math.atan2(DIP, 7);
+  const tarmacMat = push(new THREE.MeshStandardMaterial({ color: 0x74777c, roughness: 0.95 }));
+  const bankMat = push(new THREE.MeshStandardMaterial({ color: 0x6d6a63, roughness: 1 }));
+
+  // Sunken forecourt in front of the shed.
+  slab(tarmacMat, YARD.minX, YARD.maxX, YARD.minZ, YARD.maxZ, YARD_Y, 0.3);
+
+  // The ramp climbs in +x, out of the dip and up to street level.
+  const rise = ROAD_Y - YARD_Y;
+  const run = RAMP.toX - RAMP.fromX;
+  const rampGeo = push(new THREE.BoxGeometry(Math.hypot(run, rise), 0.3, RAMP.maxZ - RAMP.minZ));
+  const ramp = new THREE.Mesh(rampGeo, tarmacMat);
+  ramp.position.set((RAMP.fromX + RAMP.toX) / 2, (YARD_Y + ROAD_Y) / 2, (RAMP.minZ + RAMP.maxZ) / 2);
+  // Positive rotation about z lifts the +x end, which is the way the car climbs.
+  ramp.rotation.z = Math.atan2(rise, run);
+  ramp.receiveShadow = true;
   group.add(ramp);
 
-  // Retaining walls holding back the higher ground either side.
-  const bankGeo = new THREE.BoxGeometry(0.6, DIP + 0.6, 20);
-  const bankMat = new THREE.MeshStandardMaterial({ color: 0x6d6a63, roughness: 1 });
-  disposables.push(bankGeo, bankMat);
-  for (const bx of [-13, 13]) {
-    const bank = new THREE.Mesh(bankGeo, bankMat);
-    bank.position.set(bx, DIP / 2 - 0.15, 3);
-    group.add(bank);
+  // The turning head and the link lane back to the junction stand at street
+  // level, but the ground falls away from the road — so both are built as thick
+  // pads whose sides read as retaining walls rather than as floating tarmac.
+  slab(tarmacMat, PLATEAU.minX, PLATEAU.maxX, PLATEAU.minZ, PLATEAU.maxZ, ROAD_Y, 4);
+  slab(tarmacMat, LINK.minX, LINK.maxX, LINK.minZ, LINK.maxZ, ROAD_Y, 4);
+
+  // Retaining walls holding back the higher ground around the dip: along the
+  // road side, across the back, and up to where the ramp breaks through.
+  const wall = (minX: number, maxX: number, minZ: number, maxZ: number) =>
+    slab(bankMat, minX, maxX, minZ, maxZ, ROAD_Y + 0.15, DIP + 0.6);
+  wall(YARD.minX - 0.6, YARD.minX, YARD.minZ, YARD.maxZ);
+  wall(YARD.minX, YARD.maxX, YARD.minZ - 0.6, YARD.minZ);
+  wall(YARD.maxX, YARD.maxX + 0.6, YARD.minZ, RAMP.minZ);
+
+  // ------------------------------------------------------------- the shed
+  // Built as walls rather than one solid block: the car starts inside it and
+  // drives out through the left-hand roller door, so it has to be hollow.
+  const wallMat = push(new THREE.MeshStandardMaterial({ color: 0xf0f0ee, roughness: 0.9 }));
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number, mat: THREE.Material) => {
+    const geo = push(new THREE.BoxGeometry(w, h, d));
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return mesh;
+  };
+
+  const H = SHED.height;
+  const T = 0.3;
+  box(SHED.halfX * 2, H, T, 0, H / 2, -SHED.halfZ, wallMat);
+  box(T, H, SHED.halfZ * 2, -SHED.halfX, H / 2, 0, wallMat);
+  box(T, H, SHED.halfZ * 2, SHED.halfX, H / 2, 0, wallMat);
+
+  // Frontage, split around the opening the car comes through.
+  const openLeft = OPEN_DOOR.x - OPEN_DOOR.width / 2;
+  const openRight = OPEN_DOOR.x + OPEN_DOOR.width / 2;
+  box(openLeft + SHED.halfX, H, T, (-SHED.halfX + openLeft) / 2, H / 2, SHED.front, wallMat);
+  box(SHED.halfX - openRight, H, T, (openRight + SHED.halfX) / 2, H / 2, SHED.front, wallMat);
+  // Lintel over the opening.
+  box(
+    OPEN_DOOR.width,
+    H - OPEN_DOOR.height,
+    T,
+    OPEN_DOOR.x,
+    (OPEN_DOOR.height + H) / 2,
+    SHED.front,
+    wallMat,
+  );
+
+  const roofMat = push(new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 0.85 }));
+  box(17, 0.5, 12, 0, H + 0.25, 0, roofMat);
+
+  // Strip lights on the ceiling, so the inside of the shed is not a black hole.
+  const tubeMat = push(new THREE.MeshBasicMaterial({ color: 0xfff4d8 }));
+  for (const tx of [-3.6, 3.6]) box(0.44, 0.12, 7, tx, H - 0.42, 0, tubeMat);
+  const bay = new THREE.PointLight(0xffeccd, 42, 18, 2);
+  bay.position.set(0.6, H - 1.2, 0.5);
+  group.add(bay);
+
+  // The right-hand bay keeps its shutter down.
+  const doorGeo = push(new THREE.BoxGeometry(OPEN_DOOR.width, 4.2, 0.2));
+  const doorMat = push(
+    new THREE.MeshStandardMaterial({ color: 0x2f3540, roughness: 0.6, metalness: 0.35 }),
+  );
+  const slatGeo = push(new THREE.BoxGeometry(OPEN_DOOR.width, 0.06, 0.06));
+  const slatMat = push(new THREE.MeshStandardMaterial({ color: 0x1b2027, roughness: 0.7 }));
+  const closed = new THREE.Mesh(doorGeo, doorMat);
+  closed.position.set(CLOSED_DOOR_X, 2.2, SHED.front + 0.05);
+  group.add(closed);
+  for (let s = 0; s < 6; s++) {
+    const slat = new THREE.Mesh(slatGeo, slatMat);
+    slat.position.set(CLOSED_DOOR_X, 0.55 + s * 0.66, SHED.front + 0.17);
+    group.add(slat);
   }
 
-  const shellGeo = new THREE.BoxGeometry(16, 6, 11);
-  const shellMat = new THREE.MeshStandardMaterial({ color: 0xf0f0ee, roughness: 0.9 });
-  const shell = new THREE.Mesh(shellGeo, shellMat);
-  shell.position.y = 3;
-  group.add(shell);
-  disposables.push(shellGeo, shellMat);
-
-  const roofGeo = new THREE.BoxGeometry(17, 0.5, 12);
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 0.85 });
-  const roof = new THREE.Mesh(roofGeo, roofMat);
-  roof.position.y = 6.25;
-  group.add(roof);
-  disposables.push(roofGeo, roofMat);
-
-  // Two roller doors facing the yard, plus the personnel door on the right.
-  const doorGeo = new THREE.BoxGeometry(5.2, 4.2, 0.2);
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x2f3540, roughness: 0.6, metalness: 0.35 });
-  const slatGeo = new THREE.BoxGeometry(5.2, 0.06, 0.06);
-  const slatMat = new THREE.MeshStandardMaterial({ color: 0x1b2027, roughness: 0.7 });
-  disposables.push(doorGeo, doorMat, slatGeo, slatMat);
-  for (const dx of [-4.4, 1.4]) {
-    const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(dx, 2.2, 5.55);
-    group.add(door);
-    // Slat lines, so the shutters read as shutters.
-    for (let s = 0; s < 6; s++) {
-      const slat = new THREE.Mesh(slatGeo, slatMat);
-      slat.position.set(dx, 0.55 + s * 0.66, 5.67);
-      group.add(slat);
-    }
-  }
+  // The other shutter is rolled up under its lintel, waiting for you to leave.
+  box(OPEN_DOOR.width, 0.5, 0.42, OPEN_DOOR.x, OPEN_DOOR.height - 0.3, SHED.front + 0.06, doorMat);
 
   // Personnel door, right-hand end of the frontage.
   const sideDoorGeo = new THREE.BoxGeometry(1.1, 2.3, 0.16);

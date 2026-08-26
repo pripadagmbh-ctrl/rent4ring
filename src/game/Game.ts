@@ -15,6 +15,7 @@ import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
+import { departureRoute, departureSpeedAt, type DepartureRoute } from './departure';
 
 export interface SectorSplit {
   name: string;
@@ -37,7 +38,11 @@ export interface LapResult {
   discountPercent: number;
 }
 
-export type Phase = 'approach' | 'outlap' | 'timing';
+/**
+ * `departure` is the scripted roll out of the yard — the car drives itself and
+ * the HUD presents it as part of the approach.
+ */
+export type Phase = 'departure' | 'approach' | 'outlap' | 'timing';
 
 export interface HudState {
   phase: Phase;
@@ -147,8 +152,14 @@ export class Game {
   private accumulator = 0;
 
   // ------------------------------------------------------------ lap state
-  phase: Phase = 'approach';
+  phase: Phase = 'departure';
   private countdown: number | null = 3.2;
+  /** The scripted roll out of the yard, driven kinematically. */
+  private readonly departure: DepartureRoute;
+  private departureS = 0;
+  private departureV = 0;
+  /** Visual steering during the script, in DriveInput convention (+1 right). */
+  private departureSteer = 0;
   private lapTime = 0;
   /** Index progress since joining the circuit; the line is crossed at `toLine`. */
   private joinProgress = 0;
@@ -283,8 +294,13 @@ export class Game {
     this.composer.addPass(vignette);
     this.composer.addPass(new OutputPass());
 
-    // Start on the driveway at Burgstraße 1.
-    this.vehicle.placeOnTrack(this.approach, 0, 0);
+    // Start inside the shed at Burgstraße 1; the departure script drives the
+    // first metres, then hands over on the road.
+    this.departure = departureRoute(this.approach);
+    const start = this.departure.curve.getPointAt(0);
+    const startTangent = this.departure.curve.getTangentAt(0);
+    this.vehicle.position.copy(start);
+    this.vehicle.yaw = Math.atan2(startTangent.x, startTangent.z);
     this.lastIndex = 0;
 
     // Open on Herr Müller's send-off, so the drive begins where the garage
@@ -305,7 +321,7 @@ export class Game {
 
   /** The road the car is currently driving on. */
   private get road(): RoadPath {
-    return this.phase === 'approach' ? this.approach : this.track;
+    return this.phase === 'approach' || this.phase === 'departure' ? this.approach : this.track;
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -356,7 +372,7 @@ export class Game {
 
   /** Skip the road trip and go straight to the circuit entrance. */
   skipApproach(): void {
-    if (this.phase !== 'approach') return;
+    if (this.phase !== 'approach' && this.phase !== 'departure') return;
     this.enterCircuit();
   }
 
@@ -416,6 +432,12 @@ export class Game {
 
   private simulate(dt: number): void {
     const input = this.input.update(dt);
+
+    if (this.phase === 'departure') {
+      this.updateDeparture(dt);
+      this.updateMood(dt);
+      return;
+    }
 
     if (this.countdown !== null) {
       this.countdown -= dt;
@@ -482,6 +504,78 @@ export class Game {
     } else if (this.mood !== 'angry') {
       this.setMood('angry', 'Careful! That Armco is solid steel, you know.', 3.5);
     }
+  }
+
+  // ----------------------------------------------------------- departure
+  /**
+   * The scripted roll out of the yard. Driven kinematically along the curve
+   * rather than through the physics: `Vehicle.step()` forces the car back
+   * inside the barrier 6.5 m off the centreline, and the whole yard lies well
+   * beyond that.
+   */
+  private updateDeparture(dt: number): void {
+    // The countdown runs with the car still parked in the shed.
+    if (this.countdown !== null) {
+      this.countdown -= dt;
+      if (this.countdown > 0) return;
+      this.countdown = null;
+    }
+
+    const route = this.departure;
+    const u = Math.min(1, this.departureS / route.length);
+    const target = departureSpeedAt(u);
+    // Ease towards the schedule so the speed never steps.
+    this.departureV += THREE.MathUtils.clamp(target - this.departureV, -8 * dt, 4 * dt);
+    this.departureS += this.departureV * dt;
+
+    if (this.departureS >= route.length) {
+      this.finishDeparture();
+      return;
+    }
+
+    const at = this.departureS / route.length;
+    const pos = route.curve.getPointAt(at);
+    const tangent = route.curve.getTangentAt(at);
+    this.vehicle.position.copy(pos);
+    this.vehicle.yaw = Math.atan2(tangent.x, tangent.z);
+
+    // Read the local curvature ahead and steer the front wheels into it, so
+    // the car does not slide round the U-turn with its wheels dead straight.
+    const ahead = route.curve.getTangentAt(Math.min(1, at + 0.01));
+    let dyaw = Math.atan2(ahead.x, ahead.z) - this.vehicle.yaw;
+    if (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    if (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    const curvature = dyaw / Math.max(1e-3, route.length * 0.01);
+    // dyaw is left-positive (three.js +Y); DriveInput.steer is right-positive.
+    const steer = THREE.MathUtils.clamp(-Math.atan(this.car.wheelbase * curvature) / 0.42, -1, 1);
+    this.departureSteer += (steer - this.departureSteer) * Math.min(1, dt * 8);
+    // Feed the ramp's slope into the body attitude: negative pitch is nose-up.
+    const climb = Math.atan2(tangent.y, Math.hypot(tangent.x, tangent.z));
+    this.vehicle.pitch += (-climb - this.vehicle.pitch) * Math.min(1, dt * 7);
+    // Real longitudinal speed, so the wheels turn and the engine note follows.
+    this.vehicle.vLong = this.departureV;
+
+    this.telemetry = {
+      speedKmh: this.departureV * 3.6,
+      rpm: Math.min(this.car.redlineRpm * 0.4, 1100 + this.departureV * 120),
+      gear: 1,
+      gripUsage: 0,
+      lateralG: 0,
+      longitudinalG: 0,
+      offTrack: false,
+      contact: false,
+      impactSpeed: 0,
+      slipAngle: 0,
+    };
+  }
+
+  /** Hand the car over to the driver, already rolling in the right-hand lane. */
+  private finishDeparture(): void {
+    this.phase = 'approach';
+    const speed = this.departureV;
+    this.vehicle.placeOnTrack(this.approach, this.departure.joinIndex, this.departure.joinLateral);
+    this.vehicle.vLong = speed;
+    this.lastIndex = this.departure.joinIndex;
   }
 
   // ------------------------------------------------------------ approach
@@ -622,7 +716,7 @@ export class Game {
     this.restingLineTimer = 6;
 
     // Nothing dramatic happening — settle back to a resting read of the drive.
-    if (this.phase === 'approach') {
+    if (this.phase === 'approach' || this.phase === 'departure') {
       this.mood = 'idle';
       this.moodLine = `${Math.max(0, Math.round(this.approachRemaining()))} m to the circuit entrance.`;
       return;
@@ -645,6 +739,10 @@ export class Game {
   }
 
   private approachRemaining(): number {
+    if (this.phase === 'departure') {
+      // Still in the yard: the whole road, plus what is left of the script.
+      return this.approach.length + Math.max(0, this.departure.length - this.departureS);
+    }
     if (this.phase !== 'approach') return 0;
     const done = this.approach.at(this.vehicle.trackIndex).s;
     return Math.max(0, this.approach.length - done);
@@ -722,8 +820,10 @@ export class Game {
 
     const spin = (v.vLong / 0.34) * dt;
     for (const w of this.carMesh.wheels) w.rotation.x -= spin;
-    // rotation.y is left-positive, the input is right-positive.
-    const steerVis = THREE.MathUtils.clamp(-this.input.state.steer * 0.42, -0.42, 0.42);
+    // rotation.y is left-positive, the input is right-positive. During the
+    // scripted departure the route steers, not the player.
+    const steerInput = this.phase === 'departure' ? this.departureSteer : this.input.state.steer;
+    const steerVis = THREE.MathUtils.clamp(-steerInput * 0.42, -0.42, 0.42);
     for (const fw of this.carMesh.frontWheels) fw.rotation.y = steerVis;
 
     const brakeMat = this.carMesh.brakeLights.material as THREE.MeshBasicMaterial;
@@ -762,6 +862,15 @@ export class Game {
     const fwd = v.forward;
     const left = v.left;
     const speedFactor = Math.min(Math.abs(v.vLong) / 90, 1);
+
+    // The departure opens on a fixed yard camera watching the car leave the
+    // shed; once it swings towards the ramp, the normal chase takes over and
+    // the position lerp carries the cut smoothly.
+    if (this.phase === 'departure' && this.departureS / this.departure.length < 0.17) {
+      const look = v.position.clone();
+      look.y += 0.8;
+      return { pos: this.departure.cameraAnchor.clone(), look, fov: 58 };
+    }
 
     if (this.cameraMode === 'chase') {
       const back = 6.4 + speedFactor * 2.2;
@@ -816,6 +925,9 @@ export class Game {
 
   // ----------------------------------------------------------------- misc
   recover(): void {
+    // The car is driving itself out of the yard; there is nothing to recover
+    // from, and the road snap would teleport it out of the choreography.
+    if (this.phase === 'departure') return;
     const road = this.road;
     const idx = road.nearestIndexGlobal(this.vehicle.position);
     this.vehicle.placeOnTrack(road, idx, 0);
@@ -831,16 +943,20 @@ export class Game {
     const n = this.track.count;
     const ghost = this.phase === 'timing' ? this.ghostSampleAt(this.lapTime) : null;
 
+    // The scripted departure presents as the approach: same timebox, same
+    // remaining-distance readout, no separate HUD state to design around.
+    const onRoad = this.phase === 'approach' || this.phase === 'departure';
+
     this.callbacks.onHud({
-      phase: this.phase,
+      phase: onRoad ? 'approach' : this.phase,
       speedKmh: t?.speedKmh ?? 0,
       rpmRatio: (t?.rpm ?? 0) / this.car.redlineRpm,
       gear: this.vehicle.gear,
       lapTime: this.lapTime,
       bestLap: this.bestLap,
       lastLap: this.lastLap,
-      sectionName: this.phase === 'approach' ? 'Approach · Burgstrasse' : this.track.sectionNameAt(idx),
-      distance: this.phase === 'approach' ? 0 : this.track.distanceAt(idx),
+      sectionName: onRoad ? 'Approach · Burgstrasse' : this.track.sectionNameAt(idx),
+      distance: onRoad ? 0 : this.track.distanceAt(idx),
       lapLength: this.track.lapLength,
       offTrack: t?.offTrack ?? false,
       gripUsage: t?.gripUsage ?? 0,
