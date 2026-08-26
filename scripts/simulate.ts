@@ -161,6 +161,48 @@ function driveLap(carIndex: number, assists: boolean) {
   };
 }
 
+/** Start index of the longest near-zero-curvature run — the place for a drag test. */
+function longestStraightIndex(track: Track): number {
+  let bestStart = 0;
+  let bestLen = 0;
+  let runStart = 0;
+  let runLen = 0;
+  // Scan two laps so a straight crossing the start line is not cut in half.
+  for (let i = 0; i < track.count * 2; i++) {
+    if (Math.abs(track.at(i % track.count).curvature) < 3e-4) {
+      if (runLen === 0) runStart = i;
+      runLen++;
+      if (runLen > bestLen) {
+        bestLen = runLen;
+        bestStart = runStart;
+      }
+    } else {
+      runLen = 0;
+    }
+  }
+  return bestStart % track.count;
+}
+
+/**
+ * Straight-line 0–100 km/h: full throttle from a standing start on the longest
+ * straight, so the fleet's zeroToHundred figures can be checked against the
+ * model (the KONTEXT.md checkpoint).
+ */
+function measureZeroToHundred(carIndex: number, track: Track): number {
+  const car = FLEET[carIndex];
+  const vehicle = new Vehicle(car);
+  vehicle.assists = true;
+  vehicle.placeOnTrack(track, longestStraightIndex(track), 0);
+  const dt = 1 / 120;
+  let time = 0;
+  while (time < 20) {
+    const telemetry = vehicle.step(dt, { throttle: 1, brake: 0, steer: 0, handbrake: false }, track);
+    time += dt;
+    if (telemetry.speedKmh >= 100) return time;
+  }
+  return Infinity;
+}
+
 function fmt(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -178,6 +220,18 @@ const curvs = track.points.map((p) => Math.abs(p.curvature)).filter((c) => c > 1
 const tightest = Math.max(...curvs);
 console.log('tightest radius   :', (1 / tightest).toFixed(1), 'm');
 console.log('avg half-width    :', (track.points.reduce((a, p) => a + p.halfWidth, 0) / track.count).toFixed(2), 'm');
+console.log('');
+
+console.log('=== 0–100 km/h (full throttle, longest straight) ===');
+for (let i = 0; i < FLEET.length; i++) {
+  const car = FLEET[i];
+  const t = measureZeroToHundred(i, track);
+  const d = t - car.zeroToHundred;
+  console.log(
+    `${(car.brand + ' ' + car.model).padEnd(26)} sim ${t.toFixed(2).padStart(5)} s  ` +
+      `Angabe ${car.zeroToHundred.toFixed(1).padStart(4)} s  Δ${((d >= 0 ? '+' : '') + d.toFixed(2)).padStart(6)} s`,
+  );
+}
 console.log('');
 
 console.log('=== Auto-driver lap times ===');
