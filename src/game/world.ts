@@ -280,11 +280,6 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
       roofs.push(dummy.matrix.clone());
 
       // Garden hedge along the road frontage.
-      dummy.position.set(
-        pos.x - p.normal.x * side * (off - p.halfWidth - 2.2) * 0,
-        pos.y + 0.5,
-        pos.z,
-      );
       const hedgePos = p.pos.clone().addScaledVector(p.normal, side * (p.halfWidth + 2.4));
       dummy.position.set(hedgePos.x, hedgePos.y + 0.55, hedgePos.z);
       dummy.rotation.set(0, Math.atan2(p.tangent.x, p.tangent.z), 0);

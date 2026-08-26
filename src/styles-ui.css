@@ -1318,3 +1318,7 @@
     right: calc(14px + var(--safe-right));
   }
 }
+
+/* iPhone/Android safe areas live in the --safe-* tokens (styles.css :root)
+   and are folded into every edge-anchored rule above — one source, no
+   competing override block. */

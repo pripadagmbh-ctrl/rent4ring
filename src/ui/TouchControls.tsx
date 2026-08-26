@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { InputManager } from '../game/input';
 
 interface Props {
@@ -12,17 +12,32 @@ interface Props {
  * and the car backs up, just like holding the brake on a pad.
  */
 export default function TouchControls({ input, visible }: Props) {
-  // Hiding or unmounting the pads (pause, ceremony) swallows any pending
-  // pointerup for a still-held pad — drop the touch state, otherwise the car
-  // keeps full throttle on its own after Resume/Continue.
+  // Each steering side keeps its own pressed state so releasing one pad never
+  // wipes out the other: steer is recomputed from both flags on every change.
+  const steerHeld = useRef({ left: false, right: false });
+
+  // A press that is still down when the controls hide (pause, ceremony,
+  // unmount) must not stay latched — that is how phones ended up driving off
+  // at full throttle after "Resume".
   useEffect(() => {
-    return () => {
+    if (visible) return;
+    steerHeld.current.left = false;
+    steerHeld.current.right = false;
+    input.touch.steer = 0;
+    input.touch.throttle = 0;
+    input.touch.brake = 0;
+    input.touchActive = false;
+  }, [visible, input]);
+
+  useEffect(
+    () => () => {
+      input.touch.steer = 0;
       input.touch.throttle = 0;
       input.touch.brake = 0;
-      input.touch.steer = 0;
       input.touchActive = false;
-    };
-  }, [input, visible]);
+    },
+    [input],
+  );
 
   if (!visible) return null;
 
@@ -47,16 +62,21 @@ export default function TouchControls({ input, visible }: Props) {
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
+  const setSteer = (side: 'left' | 'right', down: boolean) => {
+    steerHeld.current[side] = down;
+    input.touch.steer = (steerHeld.current.right ? 1 : 0) - (steerHeld.current.left ? 1 : 0);
+  };
+
   return (
     <div className="touch-controls touch-controls--on">
       {/* Steering, styled as the left stick with arrow caps */}
-      <div className="ps-pad ps-pad--left" {...bind((d) => (input.touch.steer = d ? -1 : 0))} aria-label="Steer left">
+      <div className="ps-pad ps-pad--left" {...bind((d) => setSteer('left', d))} aria-label="Steer left">
         <svg viewBox="0 0 40 40">
           <circle cx="20" cy="20" r="17" className="ps-pad__ring" />
           <path d="M24 12 L14 20 L24 28" className="ps-pad__glyph" />
         </svg>
       </div>
-      <div className="ps-pad ps-pad--right" {...bind((d) => (input.touch.steer = d ? 1 : 0))} aria-label="Steer right">
+      <div className="ps-pad ps-pad--right" {...bind((d) => setSteer('right', d))} aria-label="Steer right">
         <svg viewBox="0 0 40 40">
           <circle cx="20" cy="20" r="17" className="ps-pad__ring" />
           <path d="M16 12 L26 20 L16 28" className="ps-pad__glyph" />

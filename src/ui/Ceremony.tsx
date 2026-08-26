@@ -23,38 +23,54 @@ function generateCode(carId: string, percent: number): string {
   return `NORD${pct}-${prefix}-${block}`;
 }
 
+interface Voucher {
+  code: string;
+  percent: number;
+  /** True when this is a banked code from an earlier, better lap. */
+  banked: boolean;
+}
+
 /**
  * Voucher codes are kept per car and only replaced when the driver earns a
- * better one, so nobody loses a reward by driving another lap.
+ * better one, so nobody loses a reward by driving another lap. The code and
+ * ITS percentage always travel together — showing an old (better) code next
+ * to this lap's (worse) percentage would promise the wrong discount.
  */
-function useVoucher(carId: string, percent: number): { code: string; percent: number } | null {
+function useVoucher(carId: string, percent: number): Voucher | null {
   return useMemo(() => {
-    if (percent <= 0) return null;
     const key = `r4r.voucher.${carId}`;
+    let saved: { code: string; percent: number } | null = null;
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
-        const saved = JSON.parse(raw) as { code: string; percent: number };
-        // Return the whole voucher, not just its code — the UI must show the
-        // percentage the code is actually worth, not this lap's.
-        if (saved.percent >= percent) return saved;
+        const parsed = JSON.parse(raw) as { code?: string; percent?: number };
+        if (typeof parsed.code === 'string' && typeof parsed.percent === 'number' && parsed.percent > 0) {
+          saved = { code: parsed.code, percent: parsed.percent };
+        }
       }
-      const code = generateCode(carId, percent);
-      localStorage.setItem(key, JSON.stringify({ code, percent }));
-      return { code, percent };
     } catch {
-      return { code: generateCode(carId, percent), percent };
+      /* corrupt entry — treat as absent */
     }
+
+    if (saved && saved.percent >= percent) {
+      // The banked code still stands, even after a 0% lap.
+      return { ...saved, banked: saved.percent > percent };
+    }
+    if (percent <= 0) return null;
+
+    const code = generateCode(carId, percent);
+    try {
+      localStorage.setItem(key, JSON.stringify({ code, percent }));
+    } catch {
+      /* storage unavailable — the code still works for this session */
+    }
+    return { code, percent, banked: false };
   }, [carId, percent]);
 }
 
 export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
-  const lapPercent = result.discountPercent;
-  const voucher = useVoucher(car.id, lapPercent);
-  // The saved code can be worth more than this lap earned — amount, ladder and
-  // code must all describe the same voucher.
-  const percent = voucher ? voucher.percent : lapPercent;
-  const code = voucher ? voucher.code : null;
+  const percent = result.discountPercent;
+  const voucher = useVoucher(car.id, percent);
   const [copied, setCopied] = useState(false);
 
   const confetti = useMemo(
@@ -75,9 +91,9 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
   }, [copied]);
 
   const copy = async () => {
-    if (!code) return;
+    if (!voucher) return;
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(voucher.code);
       setCopied(true);
     } catch {
       setCopied(false);
@@ -85,8 +101,7 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
   };
 
   const delta = result.time - car.targetLapSec;
-  // Herr Müller comments on the lap that was just driven, not the saved code.
-  const speech = pickSpeech(result, lapPercent);
+  const speech = pickSpeech(result, percent);
 
   return (
     <div className="ceremony">
@@ -158,15 +173,15 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
         </div>
 
         {/* --------------------------------------------------- discount ladder */}
-        <div className={`voucher ${percent > 0 ? '' : 'voucher--empty'}`}>
+        <div className={`voucher ${voucher ? '' : 'voucher--empty'}`}>
           <div className="voucher__head">
-            {percent > 0 ? (percent > lapPercent ? 'Your best voucher' : 'Your discount') : 'No discount — this time'}
+            {voucher ? (voucher.banked ? 'Your best voucher so far' : 'Your discount') : 'No discount — this time'}
           </div>
-          <div className="voucher__amount">{percent}% </div>
+          <div className="voucher__amount">{voucher ? voucher.percent : 0}% </div>
 
           <div className="ladder">
             <div className="ladder__bar">
-              <div className="ladder__fill" style={{ width: `${(percent / 10) * 100}%` }} />
+              <div className="ladder__fill" style={{ width: `${((voucher?.percent ?? 0) / 10) * 100}%` }} />
             </div>
             <div className="ladder__scale">
               <span>0 %</span>
@@ -175,26 +190,27 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
             </div>
           </div>
 
-          {percent > 0 && code ? (
+          {voucher ? (
             <>
               <button className="voucher__code" onClick={copy}>
-                {code}
+                {voucher.code}
                 <span className="voucher__copy">{copied ? 'Copied' : 'Copy'}</span>
               </button>
               <div className="voucher__note">
                 Valid against your next Rent4Ring booking.{' '}
-                {delta <= 0
-                  ? `You were ${Math.abs(delta).toFixed(1)} s inside the ${formatLap(car.targetLapSec)} target — full marks.`
-                  : `Target is ${formatLap(car.targetLapSec)}; you are ${delta.toFixed(1)} s off the full 10%.`}
-                {result.damageCost > 0 && ' The bodywork bill did cost you a little, mind.'}
-                {percent > lapPercent &&
-                  ` This lap was worth ${lapPercent}%, but your earlier ${percent}% code stands.`}
+                {voucher.banked
+                  ? `Banked from an earlier lap — this one earned ${percent}%, so the better code stands.`
+                  : delta <= 0
+                    ? `You were ${Math.abs(delta).toFixed(1)} s inside the ${formatLap(car.targetLapSec)} target.`
+                    : `Target is ${formatLap(car.targetLapSec)}; you are ${delta.toFixed(1)} s off the full 10%.`}
+                {!voucher.banked && result.damageCost > 0 && ' The bodywork bill did cost you a little, mind.'}
               </div>
             </>
           ) : (
             <div className="voucher__note">
               Get the {car.model} round inside {formatLap(car.targetLapSec * 1.5)} and the discount starts;
-              inside {formatLap(car.targetLapSec)} and it is the full 10%. You are {delta.toFixed(1)} s away.
+              inside {formatLap(car.targetLapSec)} and it is the full 10%.
+              {delta > 0 && ` You are ${delta.toFixed(1)} s away.`}
             </div>
           )}
         </div>

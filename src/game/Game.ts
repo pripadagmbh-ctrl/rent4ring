@@ -752,8 +752,10 @@ export class Game {
   private recordGhost(dt: number): void {
     if (this.phase !== 'timing') return;
     this.ghostSampleTimer += dt;
-    if (this.ghostSampleTimer < 0.08) return;
-    this.ghostSampleTimer -= 0.08;
+    if (this.ghostSampleTimer < GHOST_DT) return;
+    // Carry the remainder instead of resetting to zero — a hard reset makes
+    // every interval slightly longer than GHOST_DT and the drift adds up.
+    this.ghostSampleTimer -= GHOST_DT;
     this.ghostRecording.push({
       x: this.vehicle.position.x,
       y: this.vehicle.position.y,
@@ -761,6 +763,19 @@ export class Game {
       yaw: this.vehicle.yaw,
       t: this.lapTime,
     });
+  }
+
+  /** Index of the last ghost sample at or before `t`, by binary search — no
+   *  assumption about the sample grid, so replays survive any timing drift. */
+  private ghostIndexFor(g: GhostSample[], t: number): number {
+    let lo = 0;
+    let hi = g.length - 2;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (g[mid].t <= t) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
   }
 
   private ensureGhostMesh(): void {
@@ -774,7 +789,7 @@ export class Game {
     const g = this.ghostBest;
     if (!g || g.length < 2) return null;
     if (t >= g[g.length - 1].t) return g[g.length - 1];
-    const i = Math.min(g.length - 2, Math.floor(t / 0.08));
+    const i = this.ghostIndexFor(g, t);
     const a = g[i];
     const b = g[i + 1];
     const span = b.t - a.t;
@@ -792,7 +807,7 @@ export class Game {
     const g = this.ghostBest;
     if (!g || g.length < 2 || this.phase !== 'timing') return null;
     const pos = this.vehicle.position;
-    const seed = Math.min(g.length - 1, Math.floor(this.lapTime / 0.08));
+    const seed = this.ghostIndexFor(g, this.lapTime);
     let best = seed;
     let bestDist = Infinity;
     for (let k = -90; k <= 90; k++) {
@@ -986,7 +1001,7 @@ export class Game {
     try {
       localStorage.setItem(
         this.storageKey(),
-        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, 12000) ?? [] }),
+        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, GHOST_SAVE_CAP) ?? [] }),
       );
     } catch {
       /* storage unavailable — best lap simply will not persist */
@@ -998,10 +1013,23 @@ export class Game {
       const raw = localStorage.getItem(this.storageKey());
       if (!raw) return;
       const parsed = JSON.parse(raw) as { time: number; ghost: GhostSample[] };
-      if (typeof parsed.time === 'number') this.bestLap = parsed.time;
-      if (Array.isArray(parsed.ghost) && parsed.ghost.length > 2) {
-        this.ghostBest = parsed.ghost;
-        this.ensureGhostMesh();
+      if (typeof parsed.time === 'number' && Number.isFinite(parsed.time)) this.bestLap = parsed.time;
+      if (Array.isArray(parsed.ghost)) {
+        // A corrupt entry with non-numbers would poison the ghost mesh and
+        // minimap with NaN positions — keep only fully finite samples.
+        const clean = parsed.ghost.filter(
+          (s) =>
+            s &&
+            Number.isFinite(s.x) &&
+            Number.isFinite(s.y) &&
+            Number.isFinite(s.z) &&
+            Number.isFinite(s.yaw) &&
+            Number.isFinite(s.t),
+        );
+        if (clean.length > 2) {
+          this.ghostBest = clean;
+          this.ensureGhostMesh();
+        }
       }
     } catch {
       /* corrupt entry — ignore and start fresh */
@@ -1011,6 +1039,16 @@ export class Game {
 
 /** Direction the sun sits from the car; matches the fixed light in the sky. */
 const SUN_OFFSET = new THREE.Vector3(-160, 240, 110);
+
+/** Ghost sample interval, seconds. */
+const GHOST_DT = 0.08;
+
+/**
+ * Persisted-ghost cap: 12,000 samples at GHOST_DT is 16 minutes — comfortably
+ * past the slowest sensible lap, where the old 4,000 cut a 10-minute lap off
+ * mid-circuit. Roughly 1 MB of JSON, inside the localStorage budget.
+ */
+const GHOST_SAVE_CAP = 12000;
 
 const MOOD_PRIORITY: Record<Mood, number> = {
   idle: 0,
