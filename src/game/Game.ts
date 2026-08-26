@@ -160,6 +160,9 @@ export class Game {
   private damage = 0;
   private damageCost = 0;
   private repairRate: number;
+  /** The physics reports `contact` per 120 Hz step; these debounce it into events. */
+  private inContact = false;
+  private contactCooldown = 0;
 
   // ------------------------------------------------------- Herr Müller
   private mood: Mood = 'idle';
@@ -430,12 +433,20 @@ export class Game {
 
   // ------------------------------------------------------------- damage
   private applyDamage(t: VehicleTelemetry, dt: number): void {
-    void dt;
+    this.contactCooldown = Math.max(0, this.contactCooldown - dt);
+    const fresh = t.contact && !this.inContact && this.contactCooldown <= 0;
+    this.inContact = t.contact;
     if (!t.contact) return;
-    this.contacts++;
 
     const v = t.impactSpeed;
-    this.audio.impact(Math.min(1, v / 18));
+    // Count events, not frames: a scrape along the Armco reports contact on
+    // every 120 Hz step, but it is one contact — count and thump only on the
+    // contact-free-to-contact edge, with a short cooldown against chatter.
+    if (fresh) {
+      this.audio.impact(Math.min(1, v / 18));
+      this.contactCooldown = 0.3;
+      if (v >= 0.8) this.contacts++;
+    }
     if (v < 0.8) return; // a gentle graze against the Armco costs nothing
 
     rumble(Math.min(1, v / 14));
