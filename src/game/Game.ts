@@ -624,7 +624,7 @@ export class Game {
     if (this.phase !== 'timing') return;
     this.ghostSampleTimer += dt;
     if (this.ghostSampleTimer < 0.08) return;
-    this.ghostSampleTimer = 0;
+    this.ghostSampleTimer -= 0.08;
     this.ghostRecording.push({
       x: this.vehicle.position.x,
       y: this.vehicle.position.y,
@@ -649,7 +649,7 @@ export class Game {
     const a = g[i];
     const b = g[i + 1];
     const span = b.t - a.t;
-    const f = span > 1e-6 ? (t - a.t) / span : 0;
+    const f = span > 1e-6 ? THREE.MathUtils.clamp((t - a.t) / span, 0, 1) : 0;
     return {
       x: a.x + (b.x - a.x) * f,
       y: a.y + (b.y - a.y) * f,
@@ -839,7 +839,7 @@ export class Game {
     try {
       localStorage.setItem(
         this.storageKey(),
-        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, 4000) ?? [] }),
+        JSON.stringify({ time: this.bestLap, ghost: this.ghostBest?.slice(0, 12000) ?? [] }),
       );
     } catch {
       /* storage unavailable — best lap simply will not persist */
