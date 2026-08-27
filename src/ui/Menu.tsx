@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
+import Barbet from './Barbet';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -47,6 +48,8 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
             material, not a greeting. */}
         <div className="menu__mueller">
           <Gorilla mood="cheer" className="menu__mueller-fig" />
+          {/* The barbet greets you too. Same pairing as the garage. */}
+          <Barbet className="menu__dog" />
           <div className="speech speech--menu">
             <strong>Herr Müller</strong>
             {greeting}

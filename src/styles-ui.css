@@ -594,7 +594,10 @@
 .mueller__stage {
   height: 104px;
   display: grid;
-  place-items: end center;
+  /* Top-aligned, not bottom. If the figure ever exceeds the stage it now
+     loses his boots instead of his head — and his face is the whole point
+     of the panel, since it is where the mood shows. */
+  place-items: start center;
   overflow: hidden;
 }
 
@@ -1459,16 +1462,21 @@
    height. Last block in the last stylesheet, so it wins on source order.
    ===================================================================== */
 @media (max-height: 700px) {
-  /* Herr Müller's full panel is 259 px tall. With the timing stack taking
+  /* The stage has to keep the figure's 260:220 proportions or it crops him.
+     At 58 px against a 78 px figure it took 20 px off the top — which is
+     exactly his head, and with it every bit of expression the panel exists
+     to show. 83 px wide is 70 px tall, so nothing is cut.
+
+     Herr Müller's full panel is 259 px tall. With the timing stack taking
      135 of the 361 available, that left him hanging 26 px off the bottom
      of the screen. The big portrait goes first — it is the one part that
      carries no information — and the speech is clamped to three lines so
      a long quip cannot push the panel out again. */
   .mueller__stage {
-    height: 58px;
+    height: 70px;
   }
   .mueller__stage .gorilla {
-    width: 92px;
+    width: 83px;
   }
   .mueller__line {
     min-height: 0;
@@ -1477,4 +1485,12 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+}
+
+/* The barbet on the home screen, at Herr Müller's heel like in the garage.
+   Sized off his figure so the pair keeps its proportions at every width. */
+.menu__dog {
+  width: clamp(84px, 11.5vw, 116px);
+  flex: none;
+  margin-left: -10px;
 }
