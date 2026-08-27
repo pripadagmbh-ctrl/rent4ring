@@ -1,11 +1,26 @@
 /**
  * Builds the drive from the Rent4Ring home address to the Nordschleife.
  *
- *   Burgstraße 1, 53520 Nürburg  ->  public roads  ->  "Anbindung zur
- *   Nordschleife"  ->  merge onto the Home Circuit.
+ *   Burgstraße 1, 53520 Nürburg  ->  Hauptstraße  ->  roundabout (first exit)
+ *   ->  public roads  ->  "Anbindung zur Nordschleife"  ->  merge onto the
+ *   Home Circuit.
  *
- * Routing runs over the real OSM road graph (Dijkstra), so the drive follows
- * actual streets rather than a straight line.
+ * Routing runs over the real OSM road graph (Dijkstra) in three legs, so the
+ * drive follows actual streets rather than a straight line:
+ *
+ *   1. Home -> the roundabout's Hauptstraße arm (Dijkstra).
+ *   2. The roundabout itself, walked by its own real geometry — one arm to
+ *      the next, the same "first exit" a driver would take, not a chord cut
+ *      across the middle. A plain shortest-path search doesn't know a
+ *      roundabout has a direction of travel and will happily cut through it
+ *      the wrong way, or skip it entirely for a shorter path through a
+ *      cluster of car-park service roads it also doesn't know are private.
+ *   3. The roundabout's exit arm -> "Anbindung zur Nordschleife", the actual
+ *      surveyed access road (one-way, tagged highway=raceway — Dijkstra over
+ *      the public graph alone will never find it, since it isn't part of
+ *      that graph) -> its own end, which sits within 9 m of the circuit
+ *      centreline. That end, not an arbitrary trackData index, decides
+ *      where the drive actually joins the lap.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,6 +41,11 @@ const R = 6378137;
 const mPerLat = (Math.PI / 180) * R;
 const mPerLon = (Math.PI / 180) * R * Math.cos((lat0 * Math.PI) / 180);
 const project = (lat, lon) => ({ x: (lon - lon0) * mPerLon, z: -(lat - lat0) * mPerLat });
+const metres = (a, b) => {
+  const dx = (b.lon - a.lon) * mPerLon;
+  const dz = (b.lat - a.lat) * mPerLat;
+  return Math.hypot(dx, dz);
+};
 
 // ---------------------------------------------------------------- road graph
 const coords = new Map(); // nodeId -> {lat, lon}
@@ -38,14 +58,14 @@ const addEdge = (a, b, cost) => {
   adj.get(b).push({ to: a, cost });
 };
 
-const metres = (a, b) => {
-  const dx = (b.lon - a.lon) * mPerLon;
-  const dz = (b.lat - a.lat) * mPerLat;
-  return Math.hypot(dx, dz);
-};
+// The roundabout is walked by its own geometry (below), not routed through —
+// drop its edges from the general graph so the home->roundabout and
+// exit->accessway legs can't shortcut across the middle of it instead of
+// using the arm we've actually chosen.
+const ROUNDABOUT_WAY_ID = 116964300;
 
 for (const way of roads.elements) {
-  if (way.type !== 'way' || !way.geometry) continue;
+  if (way.type !== 'way' || !way.geometry || way.id === ROUNDABOUT_WAY_ID) continue;
   const ids = way.nodes;
   const geo = way.geometry;
   for (let i = 0; i < geo.length; i++) coords.set(ids[i], geo[i]);
@@ -54,39 +74,6 @@ for (const way of roads.elements) {
   }
 }
 console.log('graph nodes:', coords.size, 'ways:', roads.elements.length);
-
-void accessRaw;
-
-// The circuit is entered through "Zufahrt Hohenrain", which touches the
-// centreline 186 m before the T13 start/finish line — so the driver joins the
-// track, then crosses the line and the timed lap begins, exactly as on a real
-// tourist session.
-const MERGE_INDEX = 3430;
-const mergePoint = trackData.points[MERGE_INDEX];
-// Convert the merge point back to lat/lon so it can be snapped onto the graph.
-const mergeLatLon = {
-  lat: lat0 - mergePoint.z / mPerLat,
-  lon: lon0 + mergePoint.x / mPerLon,
-};
-
-// -------------------------------------------------------------- nearest node
-const nearestGraphNode = (target) => {
-  let best = null;
-  let bestD = Infinity;
-  for (const [id, c] of coords) {
-    const d = metres(c, target);
-    if (d < bestD) {
-      bestD = d;
-      best = id;
-    }
-  }
-  return { id: best, dist: bestD };
-};
-
-const startNode = nearestGraphNode(HOME);
-const endNode = nearestGraphNode(mergeLatLon);
-console.log('home snapped to node', startNode.id, `(${startNode.dist.toFixed(0)} m)`);
-console.log('circuit entry snapped to node', endNode.id, `(${endNode.dist.toFixed(0)} m)`);
 
 // -------------------------------------------------------------------- routing
 function dijkstra(from, to) {
@@ -124,13 +111,67 @@ function dijkstra(from, to) {
   return { path, distance: dist.get(to) };
 }
 
-const route = dijkstra(startNode.id, endNode.id);
-if (!route) throw new Error('no route from home to the Nordschleife access road');
-console.log('route hops:', route.path.length, 'distance:', route.distance.toFixed(0), 'm');
+const nearestGraphNode = (target) => {
+  let best = null;
+  let bestD = Infinity;
+  for (const [id, c] of coords) {
+    const d = metres(c, target);
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return { id: best, dist: bestD };
+};
+
+// -------------------------------------------------------- leg 1: to the roundabout
+// Node 5798707041 is where Hauptstraße (coming from Nürburg/home) meets the
+// roundabout — confirmed against roads.json, not guessed.
+const ROUNDABOUT_ENTRY = 5798707041;
+const startNode = nearestGraphNode(HOME);
+console.log('home snapped to node', startNode.id, `(${startNode.dist.toFixed(0)} m)`);
+
+const leg1 = dijkstra(startNode.id, ROUNDABOUT_ENTRY);
+if (!leg1) throw new Error('no route from home to the roundabout');
+console.log('leg 1 (home -> roundabout):', leg1.path.length, 'nodes,', leg1.distance.toFixed(0), 'm');
+
+// ------------------------------------------------------------- leg 2: the roundabout
+// Walked by its own surveyed geometry, ring-index 28 (the Hauptstraße arm)
+// to ring-index 32 — four short chords, the first exit reached travelling
+// the correct way round for right-hand traffic (counter-clockwise).
+const roundabout = roads.elements.find((w) => w.id === ROUNDABOUT_WAY_ID);
+const RA_ENTRY_RING = 28;
+const RA_EXIT_RING = 32;
+const raArc = roundabout.geometry.slice(RA_ENTRY_RING, RA_EXIT_RING + 1);
+const ROUNDABOUT_EXIT = roundabout.nodes[RA_EXIT_RING];
+console.log('leg 2 (roundabout arc):', raArc.length, 'points, first exit at node', ROUNDABOUT_EXIT);
+
+// --------------------------------------------------- leg 3: to the access road
+const accessWay = accessRaw.elements.find((e) => e.type === 'way');
+const accessNodes = new Map();
+for (const e of accessRaw.elements) if (e.type === 'node') accessNodes.set(e.id, e);
+const accessGeo = accessWay.nodes.map((id) => accessNodes.get(id));
+const accessStart = accessGeo[0];
+
+const leg3 = dijkstra(ROUNDABOUT_EXIT, nearestGraphNode(accessStart).id);
+if (!leg3) throw new Error('no route from the roundabout exit to the access road');
+console.log('leg 3 (roundabout -> access road):', leg3.path.length, 'nodes,', leg3.distance.toFixed(0), 'm');
+
+// ---------------------------------------------------------- leg 4: the access road
+// "Anbindung zur Nordschleife" itself — one-way, surveyed, and (unlike the
+// public graph above) actually touches the circuit: its last node sits
+// within 9 m of the centreline. Walked start to end, its own digitised
+// (and signed one-way) direction, which runs towards the circuit.
+console.log('leg 4 (access road):', accessGeo.length, 'points');
 
 // --------------------------------------------------------- assemble polyline
-const latlon = route.path.map((id) => coords.get(id));
-let pts = latlon.map((p) => project(p.lat, p.lon));
+const legLatLon = [
+  ...leg1.path.map((id) => coords.get(id)),
+  ...raArc,
+  ...leg3.path.map((id) => coords.get(id)),
+  ...accessGeo,
+];
+let pts = legLatLon.map((p) => project(p.lat, p.lon));
 
 // Drop duplicate points that would break tangent maths.
 pts = pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.5);
@@ -169,14 +210,26 @@ for (let pass = 0; pass < 4; pass++) {
 }
 
 // ------------------------------------------------ where it meets the circuit
+// The access road's own surveyed end decides the join — found by scanning
+// every centreline point (a ~370 km search over a ~3.5k-point loop, done
+// once at build time), not assumed.
 const trackPts = trackData.points;
 const tail = smoothed[smoothed.length - 1];
-const joinIndex = MERGE_INDEX;
-const joinDist = Math.hypot(trackPts[joinIndex].x - tail.x, trackPts[joinIndex].z - tail.z);
+let joinIndex = 0;
+let joinDist = Infinity;
+for (let i = 0; i < trackPts.length; i++) {
+  const d = Math.hypot(trackPts[i].x - tail.x, trackPts[i].z - tail.z);
+  if (d < joinDist) {
+    joinDist = d;
+    joinIndex = i;
+  }
+}
 console.log('merges onto the circuit at index', joinIndex, `(routed to within ${joinDist.toFixed(1)} m)`);
 
 // Pull the final stretch onto the merge point so the transition is seamless.
-const BLEND = Math.min(14, smoothed.length - 2);
+// The access road's own surveyed end already sits within a few metres of the
+// circuit, so only a short blend is needed to close that last gap cleanly.
+const BLEND = Math.min(6, smoothed.length - 2);
 const joinPt = trackPts[joinIndex];
 for (let k = 0; k < BLEND; k++) {
   const i = smoothed.length - 1 - k;

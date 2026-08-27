@@ -271,7 +271,7 @@ export class Game {
 
     this.world = buildWorld(this.track, this.approach.joinIndex);
     this.scene.add(this.world.root);
-    this.approachWorld = buildApproachWorld(this.approach);
+    this.approachWorld = buildApproachWorld(this.approach, this.track);
     this.scene.add(this.approachWorld.root);
 
     this.carMesh = buildCarMesh(car);

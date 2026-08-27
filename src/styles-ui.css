@@ -163,7 +163,11 @@
   height: 460px;
   display: block;
   cursor: grab;
-  touch-action: none;
+  /* pan-y (not none): a vertical swipe over the turntable must still scroll
+     the garage page — only horizontal drags are claimed for the rotate
+     gesture. `none` blocked all scrolling that started on the canvas, which
+     spans most of the screen on mobile. */
+  touch-action: pan-y;
 }
 
 .showroom__canvas:active {
