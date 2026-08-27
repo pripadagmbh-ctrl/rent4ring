@@ -284,6 +284,22 @@ export class Approach extends RoadPath {
     this.from = approachData.from;
     this.roundabout = approachData.roundabout;
   }
+
+  /**
+   * Which side of the circuit the public road arrives on, as the sign to use
+   * with `track.at().normal`.
+   *
+   * Derived, never assumed. The gap in the Armco and the junction furniture
+   * were both hardcoded to +1 while the generated route joins at -1, so the
+   * barrier ran straight across the entrance and had to be driven through.
+   * Re-generating the route can move the junction to the other side again.
+   */
+  entranceSide(track: RoadPath): number {
+    const p = track.at(this.joinIndex);
+    // A few samples back down the road, before it merges onto the centreline.
+    const back = this.at(Math.max(0, this.count - 4)).pos;
+    return back.clone().sub(p.pos).dot(p.normal) < 0 ? -1 : 1;
+  }
 }
 
 /** Circular or open smoothing, matching the path topology. */

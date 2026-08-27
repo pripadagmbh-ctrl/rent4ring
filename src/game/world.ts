@@ -125,7 +125,11 @@ function instance(
 // =====================================================================
 // The circuit
 // =====================================================================
-export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
+export function buildWorld(track: Track, approach?: Approach): WorldHandles {
+  // Where the public road meets the circuit, and which side it arrives on,
+  // both come from the generated route — never from a constant here.
+  const entranceIndex = approach ? approach.joinIndex : -1;
+  const entranceSide = approach ? approach.entranceSide(track) : 1;
   const root = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(track, i, side, offset, lift);
@@ -173,13 +177,13 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   }
 
   buildKerbs(track, root, disposables);
-  buildBarriers(track, root, disposables, entranceIndex);
-  buildTrees(track, root, disposables);
+  buildBarriers(track, root, disposables, entranceIndex, entranceSide);
+  buildTrees(track, root, disposables, approach);
   buildDistanceMarkers(track, root, disposables);
   buildStartLine(track, root, disposables);
   buildNuerburg(root, disposables);
   buildPetrolStation(root, disposables);
-  if (entranceIndex >= 0) buildEntrance(track, entranceIndex, root, disposables);
+  if (entranceIndex >= 0) buildEntrance(track, entranceIndex, entranceSide, root, disposables);
 
   return { root, dispose: () => disposables.forEach((d) => d.dispose()) };
 }
@@ -756,6 +760,7 @@ function buildBarriers(
   root: THREE.Group,
   disposables: { dispose(): void }[],
   entranceIndex: number,
+  entranceSide: number,
 ): void {
   const n = track.count;
   const railGeo = new THREE.BoxGeometry(0.12, 0.62, 1);
@@ -784,8 +789,8 @@ function buildBarriers(
   for (let i = 0; i < n; i += stride) {
     const p = track.at(i);
     for (const side of [1, -1]) {
-      // The public road joins from the left, so the rail opens on that side.
-      if (side === 1 && nearEntrance(i)) continue;
+      // Open the rail on whichever side the road actually arrives on.
+      if (side === entranceSide && nearEntrance(i)) continue;
       const off = p.halfWidth + 6.5;
       const pos = p.pos.clone().addScaledVector(p.normal, side * off);
       pos.y += Math.sin(p.banking) * side * off;
@@ -810,8 +815,55 @@ function buildBarriers(
   instance(postGeo, postMat, posts, root, disposables);
 }
 
-function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
+/**
+ * Cheap "would this stand in the public road" test, as a 20 m grid over the
+ * approach samples.
+ *
+ * Circuit trees are planted up to 75 m out from the centreline, and the road
+ * to the entrance runs closer than that for its last stretch — which put a
+ * full-size conifer in the middle of the carriageway, in plain sight on the
+ * run up to the junction.
+ */
+function roadKeepOut(approach: Approach): (x: number, z: number, clear: number) => boolean {
+  const CELL = 20;
+  const grid = new Map<string, THREE.Vector3[]>();
+  for (let i = 0; i < approach.count; i++) {
+    const p = approach.at(i).pos;
+    const key = `${Math.floor(p.x / CELL)},${Math.floor(p.z / CELL)}`;
+    const bucket = grid.get(key);
+    if (bucket) bucket.push(p);
+    else grid.set(key, [p]);
+  }
+  return (x, z, clear) => {
+    const cx = Math.floor(x / CELL);
+    const cz = Math.floor(z / CELL);
+    const reach = Math.ceil(clear / CELL);
+    const r2 = clear * clear;
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        const bucket = grid.get(`${cx + dx},${cz + dz}`);
+        if (!bucket) continue;
+        for (const p of bucket) {
+          if ((p.x - x) ** 2 + (p.z - z) ** 2 < r2) return true;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+function buildTrees(
+  track: Track,
+  root: THREE.Group,
+  disposables: { dispose(): void }[],
+  approach?: Approach,
+): void {
   const n = track.count;
+  // Half the carriageway, plus the widest crown, plus a margin — and a little
+  // extra because the grid measures to 6 m-spaced samples, not to the segments
+  // between them.
+  const KEEP_OUT = 9;
+  const inRoad = approach ? roadKeepOut(approach) : () => false;
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 3.2, 5);
   const crownGeo = new THREE.ConeGeometry(2.1, 8.5, 6);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1 });
@@ -842,9 +894,14 @@ function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): v
 
         const scale = 0.7 + rand() * 0.85;
         const lean = (rand() - 0.5) * 0.09;
+        const spin = rand() * Math.PI * 2;
+
+        // Drop it only after every rand() for this tree has been drawn, so
+        // skipping one cannot shift the whole forest downstream.
+        if (inRoad(pos.x, pos.z, KEEP_OUT)) continue;
 
         dummy.position.set(pos.x, pos.y + 1.6 * scale, pos.z);
-        dummy.rotation.set(lean, rand() * Math.PI * 2, lean * 0.6);
+        dummy.rotation.set(lean, spin, lean * 0.6);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         trunks.push(dummy.matrix.clone());
@@ -1170,12 +1227,15 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
 function buildEntrance(
   track: Track,
   index: number,
+  side: number,
   root: THREE.Group,
   disposables: { dispose(): void }[],
 ): void {
   const p = track.at(index);
   const group = new THREE.Group();
   group.position.copy(p.pos);
+  // That yaw makes local +z the tangent and local +x exactly p.normal, so
+  // `side` can multiply the x offsets directly.
   group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
 
   const steel = new THREE.MeshStandardMaterial({ color: 0x9aa0a7, roughness: 0.5, metalness: 0.6 });
@@ -1183,7 +1243,7 @@ function buildEntrance(
   const wall = new THREE.MeshStandardMaterial({ color: 0xe6e6e2, roughness: 0.9 });
   disposables.push(steel, red, wall);
 
-  const rail = p.halfWidth + 6.5;
+  const rail = (p.halfWidth + 6.5) * side;
 
   // Posts flanking the opening.
   const postGeo = new THREE.CylinderGeometry(0.15, 0.15, 2.6, 8);
@@ -1198,30 +1258,30 @@ function buildEntrance(
   const boomGeo = new THREE.BoxGeometry(6.4, 0.17, 0.17);
   disposables.push(boomGeo);
   const boom = new THREE.Mesh(boomGeo, red);
-  boom.position.set(rail + 3.2, 2.3, 0);
-  boom.rotation.z = -1.05;
+  boom.position.set(rail + 3.2 * side, 2.3, 0);
+  boom.rotation.z = -1.05 * side;
   group.add(boom);
 
   // Marshal hut set back from the junction.
   const hutGeo = new THREE.BoxGeometry(3.2, 2.6, 2.6);
   disposables.push(hutGeo);
   const hut = new THREE.Mesh(hutGeo, wall);
-  hut.position.set(rail + 7, 1.3, -14);
+  hut.position.set(rail + 7 * side, 1.3, -14);
   group.add(hut);
 
   const hutRoofGeo = new THREE.BoxGeometry(3.7, 0.22, 3.1);
   disposables.push(hutRoofGeo);
   const hutRoof = new THREE.Mesh(hutRoofGeo, steel);
-  hutRoof.position.set(rail + 7, 2.72, -14);
+  hutRoof.position.set(rail + 7 * side, 2.72, -14);
   group.add(hutRoof);
 
-  // Sign over the slip road.
+  // Sign over the slip road, facing back down it.
   const signGeo = new THREE.BoxGeometry(4.6, 1.3, 0.12);
   disposables.push(signGeo);
   const signMat = textMaterial('ZUFAHRT', 0x0f4a8a);
   const sign = new THREE.Mesh(signGeo, signMat);
-  sign.position.set(rail + 3.2, 3.7, 0);
-  sign.rotation.y = Math.PI / 2;
+  sign.position.set(rail + 3.2 * side, 3.7, 0);
+  sign.rotation.y = (Math.PI / 2) * side;
   group.add(sign);
   disposables.push(signMat.map!, signMat);
 
