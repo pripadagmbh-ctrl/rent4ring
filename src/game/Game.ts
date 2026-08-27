@@ -626,6 +626,13 @@ export class Game {
     this.contactCooldown = Math.max(0, this.contactCooldown - dt);
     const fresh = t.contact && !this.inContact && this.contactCooldown <= 0;
     this.inContact = t.contact;
+
+    // Fed every frame, above the early return: the scrape has to be told when
+    // the car comes off the barrier as well as when it goes on, or it would
+    // hold the last value it was given and grind away over an empty road.
+    // Full at 90 km/h — the barrier is not louder for going faster than that,
+    // and a car sliding at walking pace should barely be heard.
+    this.audio.scrape(t.contact ? Math.min(1, t.speedKmh / 90) : 0);
     if (!t.contact) return;
 
     const v = t.impactSpeed;
@@ -774,7 +781,11 @@ export class Game {
     this.carMesh.group.visible = true;
     this.setMood('angry', this.ranting.retired[0], 99);
     // Engine off — the car is not going anywhere under its own power again.
+    // The scrape is silenced by hand: `applyDamage` feeds it, and it stops
+    // being called the moment the car retires, so whatever it was doing when
+    // the car hit the barrier for the last time would otherwise stay on.
     this.audio.update(0, 0, 0, 0);
+    this.audio.scrape(0);
 
     // The truck comes up the road behind the wreck and stops just short.
     const p = this.track.at(this.vehicle.trackIndex);

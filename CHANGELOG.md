@@ -47,6 +47,10 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 - **Reifenquietschen nach Belastung.** Eigene Audiokette statt aufgedrehtem
   Windrauschen: still bis 84 % Grip, Heulen am Limit, Schrubben darüber, und
   ein stehender Reifen bleibt stumm.
+- **Crash-Geräusche.** Der Einschlag hat jetzt drei Schichten — den dumpfen
+  Schlag der Masse, das Knirschen von faltendem Blech und, erst ab etwa
+  35 km/h, Glas und Plastik. Dazu ein eigenes Schleifen, solange das Auto an
+  der Leitplanke entlangschrammt; vorher war nach dem ersten Aufprall Stille.
 
 ### Geändert
 
