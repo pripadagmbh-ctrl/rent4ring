@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { Car } from '../data/fleet';
-import { buildCarMesh, type CarMesh } from './carMesh';
+import { type CarMesh } from './carMesh';
+import { buildVehicleMesh } from './vehicleMesh';
+import { buildDucatiPanigale } from './ducati';
 import { logoTexture } from './world';
 import trackData from '../data/nordschleife.json';
 
@@ -346,6 +348,16 @@ export class GarageScene {
     sign.rotation.y = Math.PI / 2;
     this.scene.add(sign);
 
+    // ------------------------------------------- the Panigale in the corner
+    // Off the dais on the right, angled so the visitor gets the front three
+    // quarter from the bike's right — the side Ducati leaves bare, because
+    // the single-sided swingarm is on the other one.
+    const ducati = buildDucatiPanigale({ stand: true });
+    ducati.group.position.set(4.15, 0, -0.55);
+    ducati.group.rotation.y = 1.0;
+    this.scene.add(ducati.group);
+    this.disposables.push(ducati);
+
     // ------------------------------------------------------------ turntable
     const dais = new THREE.Mesh(
       push(new THREE.CylinderGeometry(3.0, 3.1, 0.09, 48)),
@@ -368,7 +380,7 @@ export class GarageScene {
       this.turntable.remove(this.carMesh.group);
       this.carMesh.dispose();
     }
-    this.carMesh = buildCarMesh(car);
+    this.carMesh = buildVehicleMesh(car);
     this.carMesh.group.position.y = 0.09;
     this.turntable.add(this.carMesh.group);
   }

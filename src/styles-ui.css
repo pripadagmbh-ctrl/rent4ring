@@ -116,12 +116,25 @@
   font-size: 14px;
 }
 
-.menu__legal {
+/* Footer: the reference material. Herr Müller does the greeting up top, so
+   what is left down here is the survey detail and the licence note. */
+.menu__footer {
   position: relative;
-  margin-top: 30px;
+  margin-top: 34px;
+  max-width: 70ch;
+}
+
+.menu__about {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.menu__legal {
+  margin: 0;
   font-size: 11px;
   color: #55606d;
-  max-width: 70ch;
   line-height: 1.6;
 }
 
@@ -263,6 +276,129 @@
 .showroom__mueller-fig {
   width: clamp(128px, 17vw, 190px);
   flex: none;
+  /* His gestures swing an arm out by up to 95 degrees, which takes the hand
+     past the viewBox — and an SVG root clips to that box by default, so the
+     hand came off at the wrist. He also has to paint over the dog he is
+     reaching towards, and as the earlier sibling he would not. */
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+/* The barbet sits at his heel. Roughly half his height, which is about right
+   for a 55 cm dog beside a silverback, and bottom-aligned by the flex row so
+   they stand on the same floor. */
+.showroom__dog-wrap {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex: none;
+  margin-left: -6px;
+  z-index: 1;
+}
+
+.showroom__dog {
+  width: clamp(58px, 7.7vw, 86px);
+  flex: none;
+}
+
+/* He gets a word in every eight seconds or so. */
+.showroom__dog-bark {
+  position: absolute;
+  left: 50%;
+  bottom: 76%;
+  white-space: nowrap;
+  background: #fff;
+  color: #10141a;
+  border-radius: 10px;
+  padding: 4px 9px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  animation: dog-bark 8s ease-in-out infinite;
+}
+
+.showroom__dog-bark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  margin-left: -6px; /* half the 12 px arrow, so it truly centres */
+  bottom: -6px;
+  border: 6px solid transparent;
+  border-top-color: #fff;
+  border-bottom: 0;
+}
+
+@keyframes dog-bark {
+  0%,
+  60% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.85);
+  }
+  66% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.07);
+  }
+  72%,
+  86% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9);
+  }
+}
+
+/* The head snaps up on the same beat as the bubble. */
+.barbet__head {
+  animation: dog-bark-head 8s ease-in-out infinite;
+}
+
+@keyframes dog-bark-head {
+  0%,
+  60%,
+  80%,
+  100% {
+    transform: translate(11.52px, 9.96px) scale(0.88);
+  }
+  66%,
+  73% {
+    transform: translate(11.52px, 5px) scale(0.88);
+  }
+}
+
+.barbet__tail {
+  transform-origin: 128px 148px;
+  animation: barbet-wag 1.9s ease-in-out infinite;
+}
+
+@keyframes barbet-wag {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barbet__tail,
+  .barbet__head {
+    animation: none;
+  }
+  /* Without the animation the bubble would sit at opacity 0 forever, so
+     hold it open instead of hiding him mid-bark. */
+  .showroom__dog-bark {
+    animation: none;
+    opacity: 1;
+    transform: translateX(-50%);
+  }
 }
 
 .showroom__mueller-speech {
@@ -443,10 +579,8 @@
 }
 
 /* ========================================================= Mueller HUD panel */
+/* Positioned by .hud__rail, not on its own — see the rail's comment. */
 .mueller {
-  position: absolute;
-  left: calc(18px + var(--safe-left));
-  bottom: calc(18px + var(--safe-bottom));
   width: 208px;
   background: rgba(8, 11, 15, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1146,8 +1280,27 @@
    Mobile HUD, consolidated. This block lives at the END of the stylesheet
    on purpose: the base .ps-pad rules above beat earlier media queries on
    source order, so the phone layout must come last to win.
+
+   Keyed on height as well as width, because a phone turned sideways is
+   852x393, not 393x852 — wider than the 760 px breakpoint, so it used to
+   fall back to the desktop HUD and Herr Müller ran off the bottom of the
+   screen. Everything in this block is HUD positioning only, so widening
+   the query does not disturb the menu or the garage.
+
+   700 px, not 560: the desktop rail needs just over 400 px for the timing
+   stack and Herr Müller, and the minimap claims 228 px off the bottom, so
+   anything shorter than about 700 px cannot show both without them touching.
    ===================================================================== */
-@media (max-width: 760px) {
+@media (max-width: 900px), (max-height: 700px) {
+  /* Goes with this layout, not with a breakpoint of its own: the compact
+     HUD moves the speed readout to the top right, straight under where the
+     keyboard hints sit. They were hidden below 760 px only, so every size
+     in between showed the hints on top of the speedo. And a screen this
+     size is a touch screen — there is no keyboard to hint about. */
+  .hud__hint {
+    display: none;
+  }
+
   /* Top-left: compact lap/approach box. */
   .timebox {
     min-width: 0;
@@ -1219,14 +1372,32 @@
     width: 120px;
     height: 6px;
   }
+  /* Right-hand stack runs downwards on a phone: pause, speed, revs, minimap
+     (which ends at 266), then the gauge. */
+  .instrument {
+    top: calc(274px + var(--safe-top));
+    right: calc(12px + var(--safe-right));
+    bottom: auto;
+  }
+  .instrument__value {
+    font-size: 14px;
+  }
 
   /* Left rail: Herr Müller under the timebox. */
   .mueller {
-    top: calc(104px + var(--safe-top));
-    bottom: auto;
-    left: calc(10px + var(--safe-left));
     width: 118px;
     padding: 6px;
+  }
+
+  /* On a phone the rail stacks from the top instead of spanning the height:
+     the bottom belongs to the touch pads, so Herr Müller follows straight
+     under the timing stack rather than being pushed down onto them. */
+  .hud__rail {
+    top: calc(16px + var(--safe-top));
+    left: calc(10px + var(--safe-left));
+    bottom: auto;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
   /* Minimap under the right rail. */
@@ -1239,7 +1410,10 @@
     height: 116px;
   }
 
-  /* Pads: two per corner, no overlap from 360 px wide up. */
+  /* Pads: two per corner. The inner offsets are 98, not 102: at 360 px wide
+     the four 80 px pads plus 14 px outer margins left the inner pair 4 px
+     short and they overlapped. 98 gives 4 px of clearance instead, and 360
+     is the narrowest phone worth supporting. */
   .ps-pad {
     width: 80px;
     height: 80px;
@@ -1249,10 +1423,10 @@
     left: calc(14px + var(--safe-left));
   }
   .ps-pad--right {
-    left: calc(102px + var(--safe-left));
+    left: calc(98px + var(--safe-left));
   }
   .ps-pad--square {
-    right: calc(102px + var(--safe-right));
+    right: calc(98px + var(--safe-right));
   }
   .ps-pad--cross {
     right: calc(14px + var(--safe-right));
@@ -1278,4 +1452,29 @@
   font-size: 11px;
   color: var(--muted);
   word-break: break-word;
+}
+
+/* =====================================================================
+   Phone held sideways: 852x393, so the whole HUD has ~360 px of usable
+   height. Last block in the last stylesheet, so it wins on source order.
+   ===================================================================== */
+@media (max-height: 700px) {
+  /* Herr Müller's full panel is 259 px tall. With the timing stack taking
+     135 of the 361 available, that left him hanging 26 px off the bottom
+     of the screen. The big portrait goes first — it is the one part that
+     carries no information — and the speech is clamped to three lines so
+     a long quip cannot push the panel out again. */
+  .mueller__stage {
+    height: 58px;
+  }
+  .mueller__stage .gorilla {
+    width: 92px;
+  }
+  .mueller__line {
+    min-height: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }

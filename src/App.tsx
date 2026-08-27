@@ -81,6 +81,7 @@ const EMPTY_HUD: HudState = {
   muellerMood: 'idle',
   muellerLine: 'Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.',
   reversing: false,
+  instrument: { label: 'Lateral', value: '0.0 g' },
 };
 
 export default function App() {

@@ -125,7 +125,11 @@ function instance(
 // =====================================================================
 // The circuit
 // =====================================================================
-export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
+export function buildWorld(track: Track, approach?: Approach): WorldHandles {
+  // Where the public road meets the circuit, and which side it arrives on,
+  // both come from the generated route — never from a constant here.
+  const entranceIndex = approach ? approach.joinIndex : -1;
+  const entranceSide = approach ? approach.entranceSide(track) : 1;
   const root = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(track, i, side, offset, lift);
@@ -173,13 +177,14 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   }
 
   buildKerbs(track, root, disposables);
-  buildBarriers(track, root, disposables, entranceIndex);
-  buildTrees(track, root, disposables);
+  buildBarriers(track, root, disposables, entranceIndex, entranceSide);
+  buildTrees(track, root, disposables, approach);
   buildDistanceMarkers(track, root, disposables);
   buildStartLine(track, root, disposables);
   buildNuerburg(root, disposables);
   buildPetrolStation(root, disposables);
-  if (entranceIndex >= 0) buildEntrance(track, entranceIndex, root, disposables);
+  buildDevilsDiner(root, disposables);
+  if (entranceIndex >= 0) buildEntrance(track, entranceIndex, entranceSide, root, disposables);
 
   return { root, dispose: () => disposables.forEach((d) => d.dispose()) };
 }
@@ -756,6 +761,7 @@ function buildBarriers(
   root: THREE.Group,
   disposables: { dispose(): void }[],
   entranceIndex: number,
+  entranceSide: number,
 ): void {
   const n = track.count;
   const railGeo = new THREE.BoxGeometry(0.12, 0.62, 1);
@@ -784,8 +790,8 @@ function buildBarriers(
   for (let i = 0; i < n; i += stride) {
     const p = track.at(i);
     for (const side of [1, -1]) {
-      // The public road joins from the left, so the rail opens on that side.
-      if (side === 1 && nearEntrance(i)) continue;
+      // Open the rail on whichever side the road actually arrives on.
+      if (side === entranceSide && nearEntrance(i)) continue;
       const off = p.halfWidth + 6.5;
       const pos = p.pos.clone().addScaledVector(p.normal, side * off);
       pos.y += Math.sin(p.banking) * side * off;
@@ -810,8 +816,55 @@ function buildBarriers(
   instance(postGeo, postMat, posts, root, disposables);
 }
 
-function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
+/**
+ * Cheap "would this stand in the public road" test, as a 20 m grid over the
+ * approach samples.
+ *
+ * Circuit trees are planted up to 75 m out from the centreline, and the road
+ * to the entrance runs closer than that for its last stretch — which put a
+ * full-size conifer in the middle of the carriageway, in plain sight on the
+ * run up to the junction.
+ */
+function roadKeepOut(approach: Approach): (x: number, z: number, clear: number) => boolean {
+  const CELL = 20;
+  const grid = new Map<string, THREE.Vector3[]>();
+  for (let i = 0; i < approach.count; i++) {
+    const p = approach.at(i).pos;
+    const key = `${Math.floor(p.x / CELL)},${Math.floor(p.z / CELL)}`;
+    const bucket = grid.get(key);
+    if (bucket) bucket.push(p);
+    else grid.set(key, [p]);
+  }
+  return (x, z, clear) => {
+    const cx = Math.floor(x / CELL);
+    const cz = Math.floor(z / CELL);
+    const reach = Math.ceil(clear / CELL);
+    const r2 = clear * clear;
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        const bucket = grid.get(`${cx + dx},${cz + dz}`);
+        if (!bucket) continue;
+        for (const p of bucket) {
+          if ((p.x - x) ** 2 + (p.z - z) ** 2 < r2) return true;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+function buildTrees(
+  track: Track,
+  root: THREE.Group,
+  disposables: { dispose(): void }[],
+  approach?: Approach,
+): void {
   const n = track.count;
+  // Half the carriageway, plus the widest crown, plus a margin — and a little
+  // extra because the grid measures to 6 m-spaced samples, not to the segments
+  // between them.
+  const KEEP_OUT = 9;
+  const inRoad = approach ? roadKeepOut(approach) : () => false;
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 3.2, 5);
   const crownGeo = new THREE.ConeGeometry(2.1, 8.5, 6);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1 });
@@ -842,9 +895,14 @@ function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): v
 
         const scale = 0.7 + rand() * 0.85;
         const lean = (rand() - 0.5) * 0.09;
+        const spin = rand() * Math.PI * 2;
+
+        // Drop it only after every rand() for this tree has been drawn, so
+        // skipping one cannot shift the whole forest downstream.
+        if (inRoad(pos.x, pos.z, KEEP_OUT)) continue;
 
         dummy.position.set(pos.x, pos.y + 1.6 * scale, pos.z);
-        dummy.rotation.set(lean, rand() * Math.PI * 2, lean * 0.6);
+        dummy.rotation.set(lean, spin, lean * 0.6);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         trunks.push(dummy.matrix.clone());
@@ -1170,12 +1228,15 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
 function buildEntrance(
   track: Track,
   index: number,
+  side: number,
   root: THREE.Group,
   disposables: { dispose(): void }[],
 ): void {
   const p = track.at(index);
   const group = new THREE.Group();
   group.position.copy(p.pos);
+  // That yaw makes local +z the tangent and local +x exactly p.normal, so
+  // `side` can multiply the x offsets directly.
   group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
 
   const steel = new THREE.MeshStandardMaterial({ color: 0x9aa0a7, roughness: 0.5, metalness: 0.6 });
@@ -1183,7 +1244,7 @@ function buildEntrance(
   const wall = new THREE.MeshStandardMaterial({ color: 0xe6e6e2, roughness: 0.9 });
   disposables.push(steel, red, wall);
 
-  const rail = p.halfWidth + 6.5;
+  const rail = (p.halfWidth + 6.5) * side;
 
   // Posts flanking the opening.
   const postGeo = new THREE.CylinderGeometry(0.15, 0.15, 2.6, 8);
@@ -1198,32 +1259,149 @@ function buildEntrance(
   const boomGeo = new THREE.BoxGeometry(6.4, 0.17, 0.17);
   disposables.push(boomGeo);
   const boom = new THREE.Mesh(boomGeo, red);
-  boom.position.set(rail + 3.2, 2.3, 0);
-  boom.rotation.z = -1.05;
+  boom.position.set(rail + 3.2 * side, 2.3, 0);
+  boom.rotation.z = -1.05 * side;
   group.add(boom);
 
   // Marshal hut set back from the junction.
   const hutGeo = new THREE.BoxGeometry(3.2, 2.6, 2.6);
   disposables.push(hutGeo);
   const hut = new THREE.Mesh(hutGeo, wall);
-  hut.position.set(rail + 7, 1.3, -14);
+  hut.position.set(rail + 7 * side, 1.3, -14);
   group.add(hut);
 
   const hutRoofGeo = new THREE.BoxGeometry(3.7, 0.22, 3.1);
   disposables.push(hutRoofGeo);
   const hutRoof = new THREE.Mesh(hutRoofGeo, steel);
-  hutRoof.position.set(rail + 7, 2.72, -14);
+  hutRoof.position.set(rail + 7 * side, 2.72, -14);
   group.add(hutRoof);
 
-  // Sign over the slip road.
+  // Sign over the slip road, facing back down it.
   const signGeo = new THREE.BoxGeometry(4.6, 1.3, 0.12);
   disposables.push(signGeo);
   const signMat = textMaterial('ZUFAHRT', 0x0f4a8a);
   const sign = new THREE.Mesh(signGeo, signMat);
-  sign.position.set(rail + 3.2, 3.7, 0);
-  sign.rotation.y = Math.PI / 2;
+  sign.position.set(rail + 3.2 * side, 3.7, 0);
+  sign.rotation.y = (Math.PI / 2) * side;
   group.add(sign);
   disposables.push(signMat.map!, signMat);
+
+  root.add(group);
+}
+
+// =====================================================================
+// Devil's Diner (Grüne Hölle), In der Stroth, Meuspath
+// =====================================================================
+/**
+ * The American diner you pass on the last corner before the entrance gate.
+ *
+ * Footprint straight off OSM way 68276586: a 17.2 x 15.8 m block centred on
+ * 50.3464769 N, 6.9661837 E, its long axis 31 degrees off north. Projected
+ * into the shared track frame that is (260.3, 1951.3) — 14 m from the road
+ * and 72 m short of the junction, which is exactly where it stands.
+ */
+function buildDevilsDiner(root: THREE.Group, disposables: { dispose(): void }[]): void {
+  // The surveyed rectangle: 17.15 m along the frontage, 15.75 m deep. With
+  // the group yawed to the long wall's heading, that long side runs along
+  // local Z, and the road sits on local -X — so the frontage faces it.
+  const WX = 15.75;
+  const DZ = 17.15;
+  const H = 5.2;
+  const FRONT = -WX / 2;
+
+  const group = new THREE.Group();
+  group.position.set(260.34, 274.05, 1951.28); // 274.05 = the road's height here
+  group.rotation.y = 0.5416;
+
+  const keep = <T extends { dispose(): void }>(x: T): T => {
+    disposables.push(x);
+    return x;
+  };
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh => {
+    const mesh = new THREE.Mesh(keep(geo), mat);
+    group.add(mesh);
+    return mesh;
+  };
+
+  const red = keep(new THREE.MeshStandardMaterial({ color: 0xb3141f, roughness: 0.62 }));
+  const cream = keep(new THREE.MeshStandardMaterial({ color: 0xe8e6e0, roughness: 0.82 }));
+  const steel = keep(
+    new THREE.MeshStandardMaterial({ color: 0x9aa0a7, roughness: 0.42, metalness: 0.7 }),
+  );
+  const glass = keep(
+    new THREE.MeshStandardMaterial({
+      color: 0x1d2a33,
+      roughness: 0.12,
+      metalness: 0.3,
+      emissive: 0x121a20,
+    }),
+  );
+  const tarmac = keep(new THREE.MeshStandardMaterial({ color: 0x4a4b4e, roughness: 0.95 }));
+
+  // The building really does stand almost on the kerb: measured against the
+  // generated route, the carriageway edge is at local x -10.64 and the kerb
+  // strip reaches -9.39, leaving 1.5 m between it and the frontage. So the
+  // forecourt runs away from the road, and the terrace goes round the end.
+  const KERB = -9.39;
+  const apronW = 18 - KERB;
+  const apron = add(new THREE.BoxGeometry(apronW, 0.12, DZ + 12), tarmac);
+  apron.position.set(KERB + apronW / 2, 0.06, 0);
+
+  // Shell, with the red plinth and parapet an American diner always wears.
+  const shell = add(new THREE.BoxGeometry(WX, H, DZ), cream);
+  shell.position.y = H / 2;
+  const plinth = add(new THREE.BoxGeometry(WX + 0.3, 1.25, DZ + 0.3), red);
+  plinth.position.y = 0.62;
+  const parapet = add(new THREE.BoxGeometry(WX + 0.5, 0.9, DZ + 0.5), red);
+  parapet.position.y = H + 0.1;
+  const deck = add(new THREE.BoxGeometry(WX + 0.36, 0.24, DZ + 0.36), steel);
+  deck.position.y = H - 0.05;
+
+  // Glazed frontage, wrapping a little way round both ends.
+  const front = add(new THREE.BoxGeometry(0.3, 2.2, DZ - 2.2), glass);
+  front.position.set(FRONT - 0.06, 2.6, 0);
+  for (const s of [-1, 1]) {
+    const wrap = add(new THREE.BoxGeometry(WX - 5, 2.2, 0.3), glass);
+    wrap.position.set(FRONT + (WX - 5) / 2, 2.6, s * (DZ / 2 + 0.06));
+  }
+
+  // Entrance canopy, kept to a 1.4 m projection so it clears the kerb.
+  const canopy = add(new THREE.BoxGeometry(1.4, 0.3, 5.2), red);
+  canopy.position.set(FRONT - 0.7, 3.5, 0);
+  for (const s of [-1, 1]) {
+    const post = add(new THREE.CylinderGeometry(0.09, 0.09, 3.5, 8), steel);
+    post.position.set(FRONT - 1.2, 1.75, s * 2.3);
+  }
+
+  // Wordmark across the parapet, facing the road. A plane's normal is +Z,
+  // so yawing it -90 degrees turns it to face local -X.
+  const signMat = textMaterial("DEVIL'S DINER", 0xb3141f, 0xf2ece2);
+  keep(signMat.map!);
+  keep(signMat);
+  const sign = add(new THREE.PlaneGeometry(8.4, 1.5), signMat);
+  sign.position.set(FRONT - 0.3, H + 0.1, 0);
+  sign.rotation.y = -Math.PI / 2;
+
+  // Pylon sign on the forecourt corner, angled at traffic coming up the road.
+  const pylonMat = textMaterial("DEVIL'S", 0x14181d, 0xd8232f);
+  keep(pylonMat.map!);
+  keep(pylonMat);
+  const pylon = add(new THREE.PlaneGeometry(2.6, 1.3), pylonMat);
+  pylon.position.set(KERB + 0.6, 4.4, 10.5);
+  pylon.rotation.y = -Math.PI / 2 - 0.35;
+  const mast = add(new THREE.BoxGeometry(0.34, 3.9, 0.34), steel);
+  mast.position.set(KERB + 0.6, 1.95, 10.5);
+
+  // Terrace round the end of the building, where there is actually room.
+  for (const [i, x] of [-4.5, -0.5, 3.5].entries()) {
+    const z = DZ / 2 + 3.4 + (i % 2) * 1.2;
+    const pole = add(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 8), steel);
+    pole.position.set(x, 1.15, z);
+    const shade = add(new THREE.ConeGeometry(1.5, 0.55, 8), red);
+    shade.position.set(x, 2.45, z);
+    const table = add(new THREE.CylinderGeometry(0.62, 0.62, 0.07, 12), cream);
+    table.position.set(x, 0.78, z);
+  }
 
   root.add(group);
 }
@@ -1402,9 +1580,17 @@ export function textMaterial(text: string, bg = 0x14181d, fg = 0xf0f0f0): THREE.
   ctx.fillStyle = `#${bg.toString(16).padStart(6, '0')}`;
   ctx.fillRect(0, 0, 512, 256);
   ctx.fillStyle = `#${fg.toString(16).padStart(6, '0')}`;
-  ctx.font = 'bold 96px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  // Shrink to fit rather than run off the canvas. At a fixed 96px "DEVIL'S
+  // DINER" measured ~640 px on a 512 px canvas and rendered as "EVIL'S DINE".
+  // Short labels like ZUFAHRT and TOTAL still get the full 96px.
+  let size = 96;
+  ctx.font = `bold ${size}px system-ui, sans-serif`;
+  while (size > 24 && ctx.measureText(text).width > canvas.width - 32) {
+    size -= 4;
+    ctx.font = `bold ${size}px system-ui, sans-serif`;
+  }
   ctx.fillText(text, 256, 132);
   return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas) });
 }

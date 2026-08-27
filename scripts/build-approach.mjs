@@ -167,42 +167,94 @@ if (roundabout) {
 }
 
 // --------------------------------------------------------- assemble polyline
+/** Centreline sample spacing, in metres. */
+const SPACING = 6;
+
 let pts = route.path.map((id) => coords.get(id)).map((p) => project(p.lat, p.lon));
 
 // Drop duplicate points that would break tangent maths.
 pts = pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.5);
 
-// ------------------------------------------------------- resample and smooth
-const SPACING = 6;
-const dist2 = (a, b) => Math.hypot(b.x - a.x, b.z - a.z);
-const cum = [0];
-for (let i = 0; i < pts.length - 1; i++) cum.push(cum[i] + dist2(pts[i], pts[i + 1]));
-const total = cum[cum.length - 1];
-const count = Math.max(2, Math.round(total / SPACING));
-
-const resampled = [];
-let seek = 0;
-for (let k = 0; k <= count; k++) {
-  const target = (k / count) * total;
-  while (seek < cum.length - 2 && cum[seek + 1] < target) seek++;
-  const segLen = cum[seek + 1] - cum[seek];
-  const t = segLen > 1e-9 ? (target - cum[seek]) / segLen : 0;
-  const a = pts[seek];
-  const b = pts[seek + 1];
-  resampled.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+// ------------------------------------------- a real arc through the ring
+// OSM stores a roundabout as a coarse polygon — six or seven nodes for the
+// whole circle. Resampling that bite at 6 m produced a visible wobble, and
+// pinning it against the smoothing (which is what used to happen) left the
+// exit as a single 80-degree corner. No car can take 80 degrees in 6 m, so
+// the physics pinned it against the lateral limit and the drive dead-ended
+// short of the junction: the "must drive through a guardrail" report.
+//
+// Substituting a true circular arc fixes the shape at the source, and the
+// smoothing below is then free to round the entry and exit tangents.
+if (raCentre) {
+  const ringBand = raRadius + 5;
+  const inRing = (p) => Math.hypot(p.x - raCentre.x, p.z - raCentre.z) < ringBand;
+  const first = pts.findIndex(inRing);
+  let last = -1;
+  for (let i = pts.length - 1; i >= 0; i--) {
+    if (inRing(pts[i])) { last = i; break; }
+  }
+  if (first >= 0 && last > first) {
+    const ang = (p) => Math.atan2(p.z - raCentre.z, p.x - raCentre.x);
+    // Total signed sweep, unwrapped step by step, so the arc runs the way
+    // the route actually goes round rather than a guessed direction.
+    let sweep = 0;
+    for (let i = first; i < last; i++) {
+      let d = ang(pts[i + 1]) - ang(pts[i]);
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      sweep += d;
+    }
+    const a0 = ang(pts[first]);
+    const steps = Math.max(2, Math.round((Math.abs(sweep) * raRadius) / SPACING));
+    const arc = [];
+    for (let k = 0; k <= steps; k++) {
+      const a = a0 + (sweep * k) / steps;
+      arc.push({
+        x: raCentre.x + Math.cos(a) * raRadius,
+        z: raCentre.z + Math.sin(a) * raRadius,
+      });
+    }
+    console.log(
+      `roundabout: replaced ${last - first + 1} OSM nodes with a ${steps}-step arc,`,
+      `sweep ${((sweep * 180) / Math.PI).toFixed(0)}°`,
+    );
+    pts = [...pts.slice(0, first), ...arc, ...pts.slice(last + 1)];
+  }
 }
 
-// Open polyline, so keep the endpoints pinned while smoothing the interior.
-// Points on the roundabout are pinned too: the exit is only a short bite of
-// the ring, and four smoothing passes flattened it into a wide sweep that
-// missed the island entirely — the junction then read as an ordinary bend.
-const onRing = (p) =>
-  raCentre !== null && Math.hypot(p.x - raCentre.x, p.z - raCentre.z) < raRadius + 6;
-let smoothed = resampled;
-for (let pass = 0; pass < 4; pass++) {
+// ------------------------------------------------------- resample and smooth
+const dist2 = (a, b) => Math.hypot(b.x - a.x, b.z - a.z);
+
+/** Even samples every SPACING metres along a polyline. */
+function resample(line, spacing) {
+  const cum = [0];
+  for (let i = 0; i < line.length - 1; i++) cum.push(cum[i] + dist2(line[i], line[i + 1]));
+  const total = cum[cum.length - 1];
+  const count = Math.max(2, Math.round(total / spacing));
+  const out = [];
+  let seek = 0;
+  for (let k = 0; k <= count; k++) {
+    const target = (k / count) * total;
+    while (seek < cum.length - 2 && cum[seek + 1] < target) seek++;
+    const segLen = cum[seek + 1] - cum[seek];
+    const t = segLen > 1e-9 ? (target - cum[seek]) / segLen : 0;
+    const a = line[seek];
+    const b = line[seek + 1];
+    out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+  }
+  return out;
+}
+
+// Smoothing now runs across the roundabout as well. It used to be held off
+// there to protect the ring's shape, but that is what left the exit as a
+// single unsteerable corner, and it is not actually needed: buildRoundabout()
+// in world.ts sizes the island from however close the finished driving line
+// passes the centre, so a line that relaxes a metre or two inwards simply
+// gets a slightly smaller island rather than a kerb across the road.
+let smoothed = resample(pts, SPACING);
+for (let pass = 0; pass < 6; pass++) {
   const next = smoothed.slice();
   for (let i = 1; i < smoothed.length - 1; i++) {
-    if (onRing(smoothed[i])) continue;
     next[i] = {
       x: smoothed[i].x * 0.4 + (smoothed[i - 1].x + smoothed[i + 1].x) * 0.3,
       z: smoothed[i].z * 0.4 + (smoothed[i - 1].z + smoothed[i + 1].z) * 0.3,
@@ -228,15 +280,70 @@ for (let i = 0; i < trackPts.length; i++) {
 console.log('merges onto the circuit at index', joinIndex, `(routed to within ${joinDist.toFixed(1)} m)`);
 
 // Pull the final stretch onto the merge point so the transition is seamless.
-const BLEND = Math.min(6, smoothed.length - 2);
+//
+// As a straight position lerp towards joinPt this collapsed the spacing at
+// the end — the last samples ended up 3.5 m apart instead of 6 and turned
+// 27 degrees in one step. Shifting the tail by a decaying *offset* keeps the
+// shape of the road and only slides it into place; the re-resample below
+// then restores even spacing.
+const BLEND = Math.min(14, smoothed.length - 2);
 const joinPt = trackPts[joinIndex];
+const tailOffset = {
+  x: joinPt.x - smoothed[smoothed.length - 1].x,
+  z: joinPt.z - smoothed[smoothed.length - 1].z,
+};
 for (let k = 0; k < BLEND; k++) {
   const i = smoothed.length - 1 - k;
-  const w = (BLEND - k) / BLEND; // 1 at the end, fading backwards
+  const t = 1 - k / BLEND;
+  const w = t * t * (3 - 2 * t); // smoothstep, so the shift dies out gently
   smoothed[i] = {
-    x: smoothed[i].x + (joinPt.x - smoothed[i].x) * w,
-    z: smoothed[i].z + (joinPt.z - smoothed[i].z) * w,
+    x: smoothed[i].x + tailOffset.x * w,
+    z: smoothed[i].z + tailOffset.z * w,
   };
+}
+
+// Even spacing again after the arc splice and the tail shift.
+smoothed = resample(smoothed, SPACING);
+smoothed[smoothed.length - 1] = { x: joinPt.x, z: joinPt.z };
+
+// ----------------------------------------------------- driveability check
+// The defect this file exists to prevent is a corner no car can take: the
+// physics holds the car within halfWidth + 6.5 m of the centreline, so a
+// step that turns too sharply pins it against that limit and the drive
+// simply stops. At SPACING metres a turn of θ implies a radius of about
+// SPACING/θ — 30° per step is a 11.5 m radius, already tighter than the
+// roundabout itself.
+const MAX_TURN_DEG = 30;
+// The scripted departure (departure.ts HANDOVER_INDEX + 2) drives the yard
+// exit on rails and hands the player the wheel here. The turn out of the
+// forecourt onto the Burgstrasse really is close to a right angle, so it is
+// reported but not treated as a fault — nobody steers it.
+const PLAYER_TAKES_OVER_AT = 8;
+
+const corners = [];
+for (let i = 1; i < smoothed.length - 1; i++) {
+  const a = smoothed[i];
+  const h0 = Math.atan2(a.x - smoothed[i - 1].x, a.z - smoothed[i - 1].z);
+  const h1 = Math.atan2(smoothed[i + 1].x - a.x, smoothed[i + 1].z - a.z);
+  let d = h1 - h0;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  corners.push({ i, deg: Math.abs((d * 180) / Math.PI) });
+}
+corners.sort((a, b) => b.deg - a.deg);
+console.log('sharpest corners (degrees per', SPACING, 'm step):');
+for (const c of corners.slice(0, 5)) {
+  const radius = SPACING / Math.max(1e-6, (c.deg * Math.PI) / 180);
+  const where = c.i < PLAYER_TAKES_OVER_AT ? ' [scripted departure]' : '';
+  console.log(`  index ${String(c.i).padStart(3)}  ${c.deg.toFixed(1).padStart(5)}°  r~${radius.toFixed(0)} m${where}`);
+}
+
+const tooSharp = corners.filter((c) => c.i >= PLAYER_TAKES_OVER_AT && c.deg > MAX_TURN_DEG);
+if (tooSharp.length) {
+  console.error(`\nERROR: ${tooSharp.length} corner(s) over the ${MAX_TURN_DEG}° limit:`);
+  for (const c of tooSharp) console.error(`  index ${c.i}: ${c.deg.toFixed(1)}°`);
+  console.error('A car cannot steer that and will jam against the lateral limit.');
+  process.exit(1);
 }
 
 // ----------------------------------------------------------------- elevation
