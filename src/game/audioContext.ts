@@ -17,6 +17,8 @@
  * `EngineAudio` borrows the context instead of making its own.
  */
 
+import { primeSpeech } from './speech';
+
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 /** iOS 16.4+ exposes an audio session; not in the DOM lib types yet. */
 type SessionNavigator = Navigator & { audioSession?: { type: string } };
@@ -113,6 +115,10 @@ export function listenForAudioUnlock(): () => void {
   const events = ['pointerdown', 'touchend', 'keydown'] as const;
   const onGesture = () => {
     const c = unlockAudio();
+    // The speech engine wants its own first word inside an activation, and it
+    // is a separate subsystem from Web Audio — unlocking one does not unlock
+    // the other. Same gesture, one line, and both are ready.
+    primeSpeech();
     if (c && c.state === 'running') detach();
   };
   const detach = () => {

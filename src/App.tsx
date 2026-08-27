@@ -3,6 +3,7 @@ import { FLEET, type Car } from './data/fleet';
 import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult, type Retirement, type SpeedTicket } from './game/Game';
 import { audioStatus, listenForAudioUnlock } from './game/audioContext';
+import { setSpeechEnabled, speechAvailable, stopSpeech } from './game/speech';
 import approachData from './data/approach.json';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
@@ -100,6 +101,8 @@ function AppInner() {
   const [car, setCar] = useState<Car>(FLEET[5]);
   const [assists, setAssists] = useState(true);
   const [muted, setMuted] = useState(false);
+  /** Herr Müller and Dale out loud, via the browser's own voices. */
+  const [voices, setVoices] = useState(true);
   const [paused, setPaused] = useState(false);
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
   const [lapResult, setLapResult] = useState<LapResult | null>(null);
@@ -203,6 +206,19 @@ function AppInner() {
     gameRef.current?.setMuted(muted);
   }, [muted]);
 
+  // Speech follows the sound toggle as well as its own: switching the game to
+  // silent and still being talked at would be the wrong kind of funny.
+  useEffect(() => {
+    setSpeechEnabled(voices && !muted);
+  }, [voices, muted]);
+
+  // A paused game must not carry on talking, and neither must an unmounted one.
+  useEffect(() => {
+    if (paused || lapResult || ticket || retired) stopSpeech();
+  }, [paused, lapResult, ticket, retired]);
+
+  useEffect(() => stopSpeech, []);
+
   useEffect(() => {
     // The ceremony pauses the game itself; do not fight it.
     if (lapResult) return;
@@ -272,6 +288,8 @@ function AppInner() {
           onAssistsChange={setAssists}
           muted={muted}
           onMutedChange={setMuted}
+          voices={voices}
+          onVoicesChange={setVoices}
         />
       </div>
     );
@@ -312,6 +330,11 @@ function AppInner() {
                 <button className="btn-ghost" onClick={() => setMuted((m) => !m)}>
                   {muted ? 'Sound on' : 'Sound off'}
                 </button>
+                {speechAvailable() && (
+                  <button className="btn-ghost" onClick={() => setVoices((v) => !v)}>
+                    Voices {voices ? 'off' : 'on'}
+                  </button>
+                )}
                 <button className="btn-ghost" onClick={() => setAssists((a) => !a)}>
                   Driver aids {assists ? 'off' : 'on'}
                 </button>

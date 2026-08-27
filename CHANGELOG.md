@@ -47,6 +47,13 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 - **Reifenquietschen nach Belastung.** Eigene Audiokette statt aufgedrehtem
   Windrauschen: still bis 84 % Grip, Heulen am Limit, Schrubben darüber, und
   ein stehender Reifen bleibt stumm.
+- **Herr Müller und Dale sprechen.** Vorläufig mit den Stimmen, die der Browser
+  ohnehin mitbringt — und zwar mit Absicht falsch herum: Herr Müller ist
+  Deutscher, also liest ihn eine **deutsche** Stimme auf Englisch, mit genau dem
+  Akzent, den die Figur haben soll. Dale bekommt eine britische, etwas schneller
+  und höher, damit man in der Kurve ohne Hinsehen weiß, wer redet. Abschaltbar
+  über „Spoken lines" in der Garage und im Pausenmenü; echte Aufnahmen lösen das
+  später ab.
 - **Crash-Geräusche.** Der Einschlag hat jetzt drei Schichten — den dumpfen
   Schlag der Masse, das Knirschen von faltendem Blech und, erst ab etwa
   35 km/h, Glas und Plastik. Dazu ein eigenes Schleifen, solange das Auto an

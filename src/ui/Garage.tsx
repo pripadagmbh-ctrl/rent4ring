@@ -10,6 +10,7 @@ import Barbet from './Barbet';
 import CardReader from './CardReader';
 import Dale from './Dale';
 import TrackGuide from './TrackGuide';
+import { say, speechAvailable, stopSpeech } from '../game/speech';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -31,6 +32,8 @@ interface Props {
   onAssistsChange(value: boolean): void;
   muted: boolean;
   onMutedChange(value: boolean): void;
+  voices: boolean;
+  onVoicesChange(value: boolean): void;
 }
 
 function readBest(carId: string): number | null {
@@ -53,6 +56,8 @@ export default function Garage({
   onAssistsChange,
   muted,
   onMutedChange,
+  voices,
+  onVoicesChange,
 }: Props) {
   const [bests, setBests] = useState<Record<string, number | null>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -132,6 +137,21 @@ export default function Garage({
     const timer = window.setInterval(() => setDaleIndex((i) => i + 1), DALE_DWELL_MS);
     return () => window.clearInterval(timer);
   }, [farewell]);
+
+  // The two of them work the floor on their own timers, so they speak the same
+  // way: whatever is on screen is what you hear. Herr Müller goes out urgent so
+  // his line is never the one that loses — he is the one being talked over
+  // otherwise, and it is his shop.
+  useEffect(() => {
+    say('mueller', spoken.text, 'urgent');
+  }, [spoken.text]);
+
+  useEffect(() => {
+    say('dale', daleLine);
+  }, [daleLine]);
+
+  // Leaving the garage in mid-sentence would carry his voice into the drive.
+  useEffect(() => stopSpeech, []);
 
   const headOut = useCallback(() => {
     // Guard the double tap: the send-off must not restart, and the drive must
@@ -391,6 +411,19 @@ export default function Garage({
                   <span className="toggle__dot" />
                   Engine sound
                 </button>
+                {/* Hidden outright where the browser has no speech engine —
+                    a toggle that cannot do anything is worse than no toggle. */}
+                {speechAvailable() && (
+                  <button
+                    className={`toggle ${voices && !muted ? 'toggle--on' : ''}`}
+                    onClick={() => onVoicesChange(!voices)}
+                    aria-pressed={voices}
+                    disabled={muted}
+                  >
+                    <span className="toggle__dot" />
+                    Spoken lines
+                  </button>
+                )}
               </div>
 
               <button
