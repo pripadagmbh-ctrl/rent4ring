@@ -1487,6 +1487,15 @@
   }
 }
 
+/* Man and dog, always side by side and always on one floor line — this row
+   stays horizontal even where .menu__mueller stacks into a column. */
+.menu__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  flex: none;
+}
+
 /* The barbet on the home screen, at Herr Müller's heel like in the garage.
    Sized off his figure so the pair keeps its proportions at every width. */
 .menu__dog {
