@@ -183,6 +183,7 @@ export function buildWorld(track: Track, approach?: Approach): WorldHandles {
   buildStartLine(track, root, disposables);
   buildNuerburg(root, disposables);
   buildPetrolStation(root, disposables);
+  buildDevilsDiner(root, disposables);
   if (entranceIndex >= 0) buildEntrance(track, entranceIndex, entranceSide, root, disposables);
 
   return { root, dispose: () => disposables.forEach((d) => d.dispose()) };
@@ -1289,6 +1290,123 @@ function buildEntrance(
 }
 
 // =====================================================================
+// Devil's Diner (Grüne Hölle), In der Stroth, Meuspath
+// =====================================================================
+/**
+ * The American diner you pass on the last corner before the entrance gate.
+ *
+ * Footprint straight off OSM way 68276586: a 17.2 x 15.8 m block centred on
+ * 50.3464769 N, 6.9661837 E, its long axis 31 degrees off north. Projected
+ * into the shared track frame that is (260.3, 1951.3) — 14 m from the road
+ * and 72 m short of the junction, which is exactly where it stands.
+ */
+function buildDevilsDiner(root: THREE.Group, disposables: { dispose(): void }[]): void {
+  // The surveyed rectangle: 17.15 m along the frontage, 15.75 m deep. With
+  // the group yawed to the long wall's heading, that long side runs along
+  // local Z, and the road sits on local -X — so the frontage faces it.
+  const WX = 15.75;
+  const DZ = 17.15;
+  const H = 5.2;
+  const FRONT = -WX / 2;
+
+  const group = new THREE.Group();
+  group.position.set(260.34, 274.05, 1951.28); // 274.05 = the road's height here
+  group.rotation.y = 0.5416;
+
+  const keep = <T extends { dispose(): void }>(x: T): T => {
+    disposables.push(x);
+    return x;
+  };
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh => {
+    const mesh = new THREE.Mesh(keep(geo), mat);
+    group.add(mesh);
+    return mesh;
+  };
+
+  const red = keep(new THREE.MeshStandardMaterial({ color: 0xb3141f, roughness: 0.62 }));
+  const cream = keep(new THREE.MeshStandardMaterial({ color: 0xe8e6e0, roughness: 0.82 }));
+  const steel = keep(
+    new THREE.MeshStandardMaterial({ color: 0x9aa0a7, roughness: 0.42, metalness: 0.7 }),
+  );
+  const glass = keep(
+    new THREE.MeshStandardMaterial({
+      color: 0x1d2a33,
+      roughness: 0.12,
+      metalness: 0.3,
+      emissive: 0x121a20,
+    }),
+  );
+  const tarmac = keep(new THREE.MeshStandardMaterial({ color: 0x4a4b4e, roughness: 0.95 }));
+
+  // The building really does stand almost on the kerb: measured against the
+  // generated route, the carriageway edge is at local x -10.64 and the kerb
+  // strip reaches -9.39, leaving 1.5 m between it and the frontage. So the
+  // forecourt runs away from the road, and the terrace goes round the end.
+  const KERB = -9.39;
+  const apronW = 18 - KERB;
+  const apron = add(new THREE.BoxGeometry(apronW, 0.12, DZ + 12), tarmac);
+  apron.position.set(KERB + apronW / 2, 0.06, 0);
+
+  // Shell, with the red plinth and parapet an American diner always wears.
+  const shell = add(new THREE.BoxGeometry(WX, H, DZ), cream);
+  shell.position.y = H / 2;
+  const plinth = add(new THREE.BoxGeometry(WX + 0.3, 1.25, DZ + 0.3), red);
+  plinth.position.y = 0.62;
+  const parapet = add(new THREE.BoxGeometry(WX + 0.5, 0.9, DZ + 0.5), red);
+  parapet.position.y = H + 0.1;
+  const deck = add(new THREE.BoxGeometry(WX + 0.36, 0.24, DZ + 0.36), steel);
+  deck.position.y = H - 0.05;
+
+  // Glazed frontage, wrapping a little way round both ends.
+  const front = add(new THREE.BoxGeometry(0.3, 2.2, DZ - 2.2), glass);
+  front.position.set(FRONT - 0.06, 2.6, 0);
+  for (const s of [-1, 1]) {
+    const wrap = add(new THREE.BoxGeometry(WX - 5, 2.2, 0.3), glass);
+    wrap.position.set(FRONT + (WX - 5) / 2, 2.6, s * (DZ / 2 + 0.06));
+  }
+
+  // Entrance canopy, kept to a 1.4 m projection so it clears the kerb.
+  const canopy = add(new THREE.BoxGeometry(1.4, 0.3, 5.2), red);
+  canopy.position.set(FRONT - 0.7, 3.5, 0);
+  for (const s of [-1, 1]) {
+    const post = add(new THREE.CylinderGeometry(0.09, 0.09, 3.5, 8), steel);
+    post.position.set(FRONT - 1.2, 1.75, s * 2.3);
+  }
+
+  // Wordmark across the parapet, facing the road. A plane's normal is +Z,
+  // so yawing it -90 degrees turns it to face local -X.
+  const signMat = textMaterial("DEVIL'S DINER", 0xb3141f, 0xf2ece2);
+  keep(signMat.map!);
+  keep(signMat);
+  const sign = add(new THREE.PlaneGeometry(8.4, 1.5), signMat);
+  sign.position.set(FRONT - 0.3, H + 0.1, 0);
+  sign.rotation.y = -Math.PI / 2;
+
+  // Pylon sign on the forecourt corner, angled at traffic coming up the road.
+  const pylonMat = textMaterial("DEVIL'S", 0x14181d, 0xd8232f);
+  keep(pylonMat.map!);
+  keep(pylonMat);
+  const pylon = add(new THREE.PlaneGeometry(2.6, 1.3), pylonMat);
+  pylon.position.set(KERB + 0.6, 4.4, 10.5);
+  pylon.rotation.y = -Math.PI / 2 - 0.35;
+  const mast = add(new THREE.BoxGeometry(0.34, 3.9, 0.34), steel);
+  mast.position.set(KERB + 0.6, 1.95, 10.5);
+
+  // Terrace round the end of the building, where there is actually room.
+  for (const [i, x] of [-4.5, -0.5, 3.5].entries()) {
+    const z = DZ / 2 + 3.4 + (i % 2) * 1.2;
+    const pole = add(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 8), steel);
+    pole.position.set(x, 1.15, z);
+    const shade = add(new THREE.ConeGeometry(1.5, 0.55, 8), red);
+    shade.position.set(x, 2.45, z);
+    const table = add(new THREE.CylinderGeometry(0.62, 0.62, 0.07, 12), cream);
+    table.position.set(x, 0.78, z);
+  }
+
+  root.add(group);
+}
+
+// =====================================================================
 // The Total station on the approach, at its surveyed position.
 // =====================================================================
 function buildPetrolStation(root: THREE.Group, disposables: { dispose(): void }[]): void {
@@ -1462,9 +1580,17 @@ export function textMaterial(text: string, bg = 0x14181d, fg = 0xf0f0f0): THREE.
   ctx.fillStyle = `#${bg.toString(16).padStart(6, '0')}`;
   ctx.fillRect(0, 0, 512, 256);
   ctx.fillStyle = `#${fg.toString(16).padStart(6, '0')}`;
-  ctx.font = 'bold 96px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  // Shrink to fit rather than run off the canvas. At a fixed 96px "DEVIL'S
+  // DINER" measured ~640 px on a 512 px canvas and rendered as "EVIL'S DINE".
+  // Short labels like ZUFAHRT and TOTAL still get the full 96px.
+  let size = 96;
+  ctx.font = `bold ${size}px system-ui, sans-serif`;
+  while (size > 24 && ctx.measureText(text).width > canvas.width - 32) {
+    size -= 4;
+    ctx.font = `bold ${size}px system-ui, sans-serif`;
+  }
   ctx.fillText(text, 256, 132);
   return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas) });
 }
