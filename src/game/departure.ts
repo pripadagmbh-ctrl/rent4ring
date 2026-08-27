@@ -54,8 +54,17 @@ export const PLATEAU = { minX: 19, maxX: 26, minZ: 8, maxZ: 24 };
 /** Street-level lane running back from the turning head to the junction. */
 export const LINK = { minX: -9.5, maxX: 20, minZ: 17.5, maxZ: 25.5 };
 
-/** Where the camera stands to watch the car come out of the shed. */
-export const CAMERA_ANCHOR = new THREE.Vector3(6.5, 3.0, 14.0);
+/**
+ * Where the camera stands to watch the car come out of the shed and round the
+ * U-turn. Verified by raycasting the actual render (not just the yard's
+ * outer bounds): x=6.5 sat far enough to the side of the OPEN_DOOR opening
+ * (centred at x=1.4, 5.2 m wide) that the sightline to the car grazed the
+ * frontage wall right beside the door at ~4 m — nearly the whole frame. This
+ * sits closer to the door's own axis (x=3.0, a gentler 3/4 angle) and further
+ * out (z=12, more than double the old clearance to both the shed's front
+ * wall and the link lane's retaining face at LINK.minZ=17.5).
+ */
+export const CAMERA_ANCHOR = new THREE.Vector3(3.0, 2.4, 12.0);
 
 /** Approach index the scripted drive hands over at. */
 const HANDOVER_INDEX = 6;
