@@ -18,10 +18,29 @@
  */
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
+/** iOS 16.4+ exposes an audio session; not in the DOM lib types yet. */
+type SessionNavigator = Navigator & { audioSession?: { type: string } };
 
 let ctx: AudioContext | null = null;
 let primed = false;
 let listening = false;
+
+/**
+ * On iPhone the ring/silent switch mutes Web Audio outright — video and
+ * `<audio>` keep playing, but anything synthesised goes silent, with the
+ * context still reporting "running". Declaring the session as playback is
+ * the only way to opt out of that, and it is why unlocking the context in
+ * the gesture was not enough on a phone with the switch flipped.
+ */
+function claimAudioSession(): void {
+  const session = (navigator as SessionNavigator).audioSession;
+  if (!session) return;
+  try {
+    session.type = 'playback';
+  } catch {
+    /* older WebKit exposes it read-only */
+  }
+}
 
 function create(): AudioContext | null {
   const Ctor = window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
@@ -39,6 +58,7 @@ function create(): AudioContext | null {
  * effect) is already too late on iOS.
  */
 export function unlockAudio(): AudioContext | null {
+  claimAudioSession();
   if (!ctx) ctx = create();
   if (!ctx) return null;
 
@@ -62,6 +82,17 @@ export function unlockAudio(): AudioContext | null {
   }
 
   return ctx;
+}
+
+/**
+ * Short human-readable state, so a silent phone can be diagnosed from the
+ * pause screen instead of guessing.
+ */
+export function audioStatus(): string {
+  if (!ctx) return 'not started';
+  if (ctx.state !== 'running') return ctx.state;
+  const session = (navigator as SessionNavigator).audioSession;
+  return session ? `running (${session.type})` : 'running';
 }
 
 /** The shared context, or null before the first gesture. */
@@ -90,5 +121,18 @@ export function listenForAudioUnlock(): () => void {
   };
 
   for (const type of events) document.addEventListener(type, onGesture, true);
-  return detach;
+
+  // Coming back from a phone call, a lock screen or another tab leaves the
+  // context suspended; without this the drive resumes in silence.
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible' || !ctx) return;
+    claimAudioSession();
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+  };
+  document.addEventListener('visibilitychange', onVisible);
+
+  return () => {
+    detach();
+    document.removeEventListener('visibilitychange', onVisible);
+  };
 }

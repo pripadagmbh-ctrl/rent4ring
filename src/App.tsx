@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useRef, useState, type ReactNode } f
 import { FLEET, type Car } from './data/fleet';
 import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult } from './game/Game';
-import { listenForAudioUnlock } from './game/audioContext';
+import { audioStatus, listenForAudioUnlock } from './game/audioContext';
 import approachData from './data/approach.json';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
@@ -277,6 +277,11 @@ function AppInner() {
               <h2>Paused</h2>
               <p>
                 {car.brand} {car.model} · Home Circuit Nordschleife
+                {/* Phones can stay silent for reasons the page cannot see
+                    (the ring/silent switch, a refused unlock). Showing the
+                    real state turns that into something reportable. */}
+                <br />
+                <small style={{ color: 'var(--muted)' }}>Audio: {audioStatus()}</small>
               </p>
               <div className="dialog__actions">
                 <button className="btn-primary" onClick={() => setPaused(false)}>

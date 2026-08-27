@@ -905,6 +905,11 @@ button {
 
 .touch-controls--on {
   display: block;
+  /* The strip itself takes the presses and matches each pointer to the
+     nearest pad, so a thumb landing beside one still counts. Nothing else
+     lives down here on a phone — the HUD sits along the top. */
+  pointer-events: auto;
+  touch-action: none;
 }
 
 @media (max-width: 760px) {
