@@ -3,6 +3,40 @@ import type { Car } from '../data/fleet';
 import type { RoadPath } from './track';
 
 const G = 9.81;
+
+/** Full mechanical lock at the road wheels, radians. */
+const STEER_LOCK = 0.58;
+/** The least lock ever offered, so the car still steers at Döttinger speed. */
+const STEER_MIN = 0.02;
+/**
+ * How far past the tyres' limit full stick is allowed to reach. Above 1 you
+ * can provoke a slide deliberately, which is the point of a rear-drive car;
+ * far above it every input is a slide whether you wanted one or not.
+ */
+const STEER_HEADROOM = 1.35;
+
+/**
+ * The largest steering angle worth giving the driver at this speed.
+ *
+ * Derived from the tyres rather than picked. A steer angle d asks for a
+ * corner of radius L/d, which at speed v demands v*v*d/L of lateral
+ * acceleration; the tyres can supply at most mu*g. Anything past
+ * L*mu*g/(v*v) is therefore not steering, it is scrubbing.
+ *
+ * The old law was a flat 0.58/(1 + v*0.045). At 120 km/h that offered 13.3
+ * degrees where the tyres could use 1.6 — eight times more lock than the car
+ * could convert into grip, so a quarter of stick travel already put it
+ * sideways. That is what "the cars drift too much" was.
+ *
+ * Exported because the headless driver in scripts/simulate.ts has to know the
+ * same law to place its stick; it used to carry a copy, which would now be
+ * silently wrong.
+ */
+export function maxSteerAngle(speedMs: number, mu: number, wheelbase: number): number {
+  const v = Math.max(Math.abs(speedMs), 0.01);
+  const gripLimit = (wheelbase * mu * G * STEER_HEADROOM) / (v * v);
+  return Math.max(STEER_MIN, Math.min(STEER_LOCK, gripLimit));
+}
 const AIR_DENSITY = 1.225;
 const WHEEL_RADIUS = 0.34;
 const DRIVELINE_EFFICIENCY = 0.9;
@@ -137,16 +171,6 @@ export class Vehicle {
       rollingCoef = 0.09;
     }
 
-    // --- Steering ------------------------------------------------------
-    const speed = Math.max(Math.abs(this.vLong), 0.01);
-    // Speed-sensitive lock keeps the car stable on the Döttinger Höhe.
-    const maxSteer = THREE.MathUtils.clamp(0.58 / (1 + speed * 0.045), 0.055, 0.58);
-    // Input is +1 for a right turn; the model below is left-positive.
-    const targetSteer = -input.steer * maxSteer;
-    const steerRate = 6.5;
-    this.steerActual += THREE.MathUtils.clamp(targetSteer - this.steerActual, -steerRate * dt, steerRate * dt);
-    const delta = this.steerActual;
-
     // --- Vertical loads ------------------------------------------------
     const v2 = this.vLong * this.vLong;
     const downforceN = car.downforce * v2 * mass * G;
@@ -163,6 +187,16 @@ export class Vehicle {
     const Fzr = Math.max(400, staticRear + transfer + downforceN * 0.58);
 
     const mu = car.grip * surfaceMu * (0.82 + 0.18 * this.condition);
+
+    // --- Steering ------------------------------------------------------
+    // Below the load and friction block on purpose: the lock is derived from
+    // what these tyres can hold on this surface, so it needs mu.
+    const maxSteer = maxSteerAngle(this.vLong, mu, L);
+    // Input is +1 for a right turn; the model below is left-positive.
+    const targetSteer = -input.steer * maxSteer;
+    const steerRate = 6.5;
+    this.steerActual += THREE.MathUtils.clamp(targetSteer - this.steerActual, -steerRate * dt, steerRate * dt);
+    const delta = this.steerActual;
 
     // --- Longitudinal forces -------------------------------------------
     const gearRatio = car.gearRatios[this.gear - 1] ?? 1;
