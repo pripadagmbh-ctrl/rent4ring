@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { Car } from '../data/fleet';
 import type { Retirement } from '../game/Game';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
 import CardReader from './CardReader';
+import BanScene from './BanScene';
 
 interface Props {
   car: Car;
@@ -16,11 +18,21 @@ interface Props {
  * lasts exactly until you press the button.
  */
 export default function BanScreen({ car, result, onGarage }: Props) {
+  // The yard scene plays first; the paperwork comes after.
+  const [scenePlayed, setScenePlayed] = useState(false);
   const euros = result.damageCost.toLocaleString('en-GB', {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: 0,
   });
+
+  if (!scenePlayed) {
+    return (
+      <div className="overlay ban">
+        <BanScene car={car} onDone={() => setScenePlayed(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="overlay ban">

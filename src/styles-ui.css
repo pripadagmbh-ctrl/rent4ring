@@ -1992,3 +1992,339 @@
 .swipe-dialog .cardreader {
   margin-top: 6px;
 }
+
+/* ============================================================= ban scene */
+/* The yard, staged in 2D. Every actor is absolutely placed against this box
+   and each stage class moves the ones that beat needs; nothing animates by
+   itself, so the timing stays in one place (BanScene's BEATS). */
+.banscene {
+  position: relative;
+  width: min(680px, calc(100vw - 32px));
+  height: 300px;
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(#8fa7bd 0%, #b7c4cb 58%, #6f7a72 58%, #5d675f 100%);
+  border: 1px solid var(--line);
+}
+
+.banscene__sky {
+  position: absolute;
+  inset: 0 0 42% 0;
+}
+
+/* Nürburg on its cone, small and far off on the left. */
+.banscene__castle {
+  position: absolute;
+  left: 8%;
+  bottom: 0;
+  width: 128px;
+  height: 96px;
+}
+
+.banscene__rock {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 70px;
+  background: #5a5f4e;
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+.banscene__keep {
+  position: absolute;
+  left: 50%;
+  bottom: 56px;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  background: #8d8579;
+  box-shadow: 0 -8px 0 -4px #8d8579;
+}
+
+.banscene__roofs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  background:
+    repeating-linear-gradient(90deg, #7d6a5e 0 26px, transparent 26px 46px);
+  opacity: 0.75;
+}
+
+.banscene__yard {
+  position: absolute;
+  inset: 58% 0 0 0;
+  background: linear-gradient(#4c5257, #3a4045);
+}
+
+/* ------------------------------------------------------------ the truck */
+.banscene__truck {
+  position: absolute;
+  right: -30%;
+  bottom: 20%;
+  width: 190px;
+  height: 74px;
+  transition: right 1.6s cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.banscene__deck {
+  position: absolute;
+  left: 0;
+  bottom: 12px;
+  width: 118px;
+  height: 12px;
+  background: #6a6f75;
+  transform-origin: left bottom;
+  transition: transform 1.2s ease-in-out;
+}
+
+.banscene__cab {
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  width: 62px;
+  height: 44px;
+  background: #c4121f;
+  border-radius: 5px 8px 3px 3px;
+}
+
+.banscene__beacon {
+  position: absolute;
+  right: 22px;
+  bottom: 56px;
+  width: 18px;
+  height: 7px;
+  border-radius: 3px;
+  background: #ffb020;
+  animation: banscene-beacon 0.5s steps(1) infinite;
+}
+
+@keyframes banscene-beacon {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.2;
+  }
+}
+
+.banscene--arrive .banscene__truck,
+.banscene--unload .banscene__truck,
+.banscene--rage .banscene__truck {
+  right: 6%;
+}
+
+.banscene--unload .banscene__deck,
+.banscene--rage .banscene__deck,
+.banscene--carry .banscene__deck {
+  transform: rotate(-16deg);
+}
+
+/* The truck leaves once its job is done. */
+.banscene--carry .banscene__truck,
+.banscene--wind .banscene__truck,
+.banscene--kick .banscene__truck,
+.banscene--treat .banscene__truck,
+.banscene--inside .banscene__truck {
+  right: 108%;
+}
+
+/* ------------------------------------------------------------ the wreck */
+.banscene__wreck {
+  position: absolute;
+  right: 24%;
+  bottom: 18%;
+  width: 96px;
+  height: 26px;
+  border-radius: 10px 4px 3px 6px;
+  background: linear-gradient(#c8ccd2, #8b9199);
+  transform: rotate(-3deg) scaleY(0.7);
+  opacity: 0;
+  transition: opacity 0.5s, right 1.2s ease-out, bottom 1.2s ease-out;
+}
+
+.banscene--unload .banscene__wreck {
+  opacity: 1;
+  right: 34%;
+  bottom: 12%;
+}
+
+.banscene--rage .banscene__wreck,
+.banscene--carry .banscene__wreck,
+.banscene--wind .banscene__wreck,
+.banscene--kick .banscene__wreck,
+.banscene--treat .banscene__wreck,
+.banscene--inside .banscene__wreck {
+  opacity: 1;
+  right: 40%;
+  bottom: 11%;
+}
+
+/* --------------------------------------------------------------- actors */
+.banscene__mueller {
+  position: absolute;
+  left: 20%;
+  bottom: 8%;
+  width: 118px;
+  transition: left 0.9s ease-in-out, transform 0.35s;
+}
+
+.banscene__mueller svg {
+  overflow: visible;
+}
+
+.banscene--rage .banscene__mueller {
+  animation: banscene-stomp 0.34s ease-in-out 6;
+}
+
+@keyframes banscene-stomp {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(2deg);
+  }
+}
+
+.banscene--carry .banscene__mueller,
+.banscene--wind .banscene__mueller {
+  left: 31%;
+}
+
+.banscene--kick .banscene__mueller {
+  left: 33%;
+  transform: rotate(-8deg);
+}
+
+.banscene--inside .banscene__mueller {
+  left: 4%;
+  opacity: 0;
+  transition: left 1.4s ease-in, opacity 1.4s;
+}
+
+/* The customer: a small huddled shape, until he is not. */
+.banscene__customer {
+  position: absolute;
+  left: 46%;
+  bottom: 9%;
+  width: 26px;
+  height: 42px;
+  border-radius: 9px 9px 4px 4px;
+  background: linear-gradient(#d8d2c6, #a89f90);
+  transition: all 0.8s ease-in-out;
+}
+
+.banscene--carry .banscene__customer,
+.banscene--wind .banscene__customer {
+  left: 37%;
+  bottom: 26%;
+  transform: rotate(78deg);
+}
+
+/* The punt: up and away over the roofs, towards the castle. */
+.banscene--kick .banscene__customer,
+.banscene--treat .banscene__customer,
+.banscene--inside .banscene__customer {
+  left: 13%;
+  bottom: 68%;
+  transform: rotate(430deg) scale(0.45);
+  opacity: 0;
+  transition: all 2.2s cubic-bezier(0.2, -0.4, 0.6, 1);
+}
+
+.banscene__dog {
+  position: absolute;
+  left: 12%;
+  bottom: 8%;
+  width: 66px;
+  transition: left 0.9s ease-in-out, transform 0.4s;
+}
+
+.banscene--wind .banscene__dog,
+.banscene--kick .banscene__dog {
+  transform: translateY(-6px) scale(1.06);
+}
+
+.banscene--treat .banscene__dog {
+  left: 16%;
+}
+
+.banscene--inside .banscene__dog {
+  left: 2%;
+  opacity: 0;
+  transition: left 1.4s ease-in, opacity 1.4s;
+}
+
+/* The biscuit, handed over on the way back inside. */
+.banscene__treat {
+  position: absolute;
+  left: 24%;
+  bottom: 22%;
+  width: 13px;
+  height: 9px;
+  border-radius: 2px;
+  background: #c9a227;
+  opacity: 0;
+  transition: all 0.6s ease-out;
+}
+
+.banscene--treat .banscene__treat {
+  opacity: 1;
+  left: 20%;
+  bottom: 15%;
+}
+
+/* -------------------------------------------------------------- caption */
+.banscene__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  margin: 0;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #f2ece2;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+  padding: 0 46px;
+}
+
+.banscene__skip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(8, 11, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+@media (max-width: 620px) {
+  .banscene {
+    height: 240px;
+  }
+  .banscene__caption {
+    font-size: 11.5px;
+    padding: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banscene__beacon,
+  .banscene--rage .banscene__mueller {
+    animation: none;
+  }
+  .banscene * {
+    transition-duration: 0.01ms !important;
+  }
+}
