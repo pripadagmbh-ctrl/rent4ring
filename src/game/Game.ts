@@ -13,11 +13,12 @@ import { buildWorld, buildApproachWorld, buildSky, type WorldHandles } from './w
 import { type CarMesh } from './carMesh';
 import { buildVehicleMesh } from './vehicleMesh';
 import { buildTowTruck, type TowTruck } from './towTruck';
+import { buildCrowd, type Crowd } from './crowd';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
-import { departureRoute, departureSpeedAt, fleetParkingSpots, type DepartureRoute } from './departure';
+import { departureRoute, departureSpeedAt, fleetParkingSpots, homeBaseFrame, toWorld, YARD_Y, type DepartureRoute } from './departure';
 import { FLEET } from '../data/fleet';
 
 export interface SectorSplit {
@@ -201,6 +202,11 @@ export class Game {
   private lastGear = 1;
 
   // ---------------------------------------------------------- retirement
+  /** The regulars stood in the yard, waving the car out. */
+  private crowd: Crowd | null = null;
+  /** Wall clock for animation that is not tied to the physics step. */
+  private elapsed = 0;
+
   private towTruck: TowTruck | null = null;
   private towFrom = new THREE.Vector3();
   private towTo = new THREE.Vector3();
@@ -327,6 +333,19 @@ export class Game {
       this.parkedFleet.push(mesh);
     });
 
+    // Herr Müller's regulars, stood in front of the shed to see you off. The
+    // crowd is built in its own local frame, so it only needs the yard's
+    // position and heading to be dropped into place.
+    const yard = homeBaseFrame(this.approach);
+    const crowd = buildCrowd();
+    crowd.group.position.copy(toWorld(yard, 0, YARD_Y, 0));
+    crowd.group.rotation.y = yard.yaw;
+    crowd.group.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+    });
+    this.scene.add(crowd.group);
+    this.crowd = crowd;
+
     // ------------------------------------------------------ post-processing
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -429,6 +448,8 @@ export class Game {
     // its own geometries and materials like everything else here.
     this.towTruck?.dispose();
     this.towTruck = null;
+    this.crowd?.dispose();
+    this.crowd = null;
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
     this.renderer.dispose();
@@ -1013,6 +1034,11 @@ export class Game {
 
   // -------------------------------------------------------------- visuals
   private updateVisuals(dt: number): void {
+    this.elapsed += dt;
+    // They wave the car out of the yard and then get on with their morning —
+    // an arm going up and down for twenty kilometres would be unnerving.
+    if (this.crowd && this.phase === 'departure') this.crowd.update(this.elapsed);
+
     const v = this.vehicle;
     const g = this.carMesh.group;
     g.position.copy(v.position);

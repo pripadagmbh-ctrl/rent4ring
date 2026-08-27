@@ -36,10 +36,9 @@ export default function PoweredBy() {
           onError={() => setHasLogo(false)}
         />
       )}
-      {/* The horizontal mark carries "PRIPADA" but not the legal form, so
-          that is set alongside it. If the image is missing this falls back
-          to the full name on its own. */}
-      <span className="poweredby__name">{hasLogo ? 'GmbH' : 'Pripada GmbH'}</span>
+      {/* The mark carries "PRIPADA"; the domain suffix finishes it off. With
+          no image it has to stand alone, so it reads as the whole address. */}
+      <span className="poweredby__name">{hasLogo ? '.de' : 'pripada.de'}</span>
     </a>
   );
 }

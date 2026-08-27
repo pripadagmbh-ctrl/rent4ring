@@ -2330,25 +2330,26 @@
 }
 
 /* ========================================================== powered by */
+/* Kept quiet: it is a credit, not a second brand on the page. */
 .poweredby {
   display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 16px;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 18px;
   text-decoration: none;
-  opacity: 0.55;
+  opacity: 0.32;
   transition: opacity 0.2s;
 }
 
 .poweredby:hover {
-  opacity: 0.9;
+  opacity: 0.65;
 }
 
 .poweredby__label {
   font-family: var(--font-display);
   text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  font-size: 8px;
   color: var(--muted);
 }
 
@@ -2356,19 +2357,20 @@
    flipped to white. brightness(0) first flattens it to solid black so the
    invert lands on a clean white, whatever the source greys were. */
 .poweredby__logo {
-  height: 17px;
+  height: 11px;
+  align-self: center;
   width: auto;
   display: block;
   filter: brightness(0) invert(1);
 }
 
-/* Sits beside the mark and carries the legal form the horizontal artwork
-   leaves off; becomes the whole name if the image cannot load. */
+/* Finishes the mark into a domain; becomes the whole address without it. */
 .poweredby__name {
   font-family: var(--font-display);
   text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-size: 8.5px;
   color: var(--muted);
+  align-self: center;
 }
 
