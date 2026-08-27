@@ -1,7 +1,7 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FLEET, type Car } from './data/fleet';
 import type { MuellerLine } from './data/muellerLines';
-import { Game, type HudState, type LapResult, type Retirement } from './game/Game';
+import { Game, type HudState, type LapResult, type Retirement, type SpeedTicket } from './game/Game';
 import { audioStatus, listenForAudioUnlock } from './game/audioContext';
 import approachData from './data/approach.json';
 import Menu from './ui/Menu';
@@ -10,6 +10,7 @@ import Hud from './ui/Hud';
 import Ceremony from './ui/Ceremony';
 import TouchControls from './ui/TouchControls';
 import BanScreen from './ui/BanScreen';
+import SpeedTicketCard from './ui/SpeedTicketCard';
 
 type Phase = 'menu' | 'garage' | 'driving';
 
@@ -83,6 +84,7 @@ const EMPTY_HUD: HudState = {
   muellerLine: 'Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.',
   reversing: false,
   instrument: { label: 'Lateral', value: '0.0 g' },
+  dale: null,
 };
 
 export default function App() {
@@ -103,6 +105,8 @@ function AppInner() {
   const [lapResult, setLapResult] = useState<LapResult | null>(null);
   /** Set when the damage bar fills: the drive is over and the car is towed. */
   const [retired, setRetired] = useState<Retirement | null>(null);
+  /** The village camera caught you on the way to the circuit. */
+  const [ticket, setTicket] = useState<SpeedTicket | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [gameReady, setGameReady] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
@@ -150,6 +154,9 @@ function AppInner() {
       onLapComplete(result) {
         setLapResult(result);
         game.setPaused(true);
+      },
+      onTicket(t) {
+        setTicket(t);
       },
       onRetired(result) {
         // The sequence has played out; the game keeps rendering behind the
@@ -199,15 +206,15 @@ function AppInner() {
   useEffect(() => {
     // The ceremony pauses the game itself; do not fight it.
     if (lapResult) return;
-    gameRef.current?.setPaused(paused);
-  }, [paused, lapResult]);
+    gameRef.current?.setPaused(paused || ticket !== null);
+  }, [paused, lapResult, ticket]);
 
   useEffect(() => {
     // While any dialog is up, drive keys stop capturing so Space/Enter can
     // operate the dialog buttons again.
     const g = gameRef.current;
-    if (g) g.input.captureEnabled = !paused && !lapResult && !retired;
-  }, [paused, lapResult, retired, gameReady]);
+    if (g) g.input.captureEnabled = !paused && !lapResult && !retired && !ticket;
+  }, [paused, lapResult, retired, ticket, gameReady]);
 
   const startDriving = useCallback((farewell?: MuellerLine) => {
     // Straight from the menu there is no garage send-off; the game picks one.
@@ -215,6 +222,7 @@ function AppInner() {
     setHud(EMPTY_HUD);
     setLapResult(null);
     setRetired(null);
+    setTicket(null);
     setPaused(false);
     setPhase('driving');
   }, []);
@@ -285,7 +293,7 @@ function AppInner() {
           />
         )}
 
-        {paused && !lapResult && !retired && (
+        {paused && !lapResult && !retired && !ticket && (
           <div className="overlay">
             <div className="dialog">
               <h2>Paused</h2>
@@ -320,6 +328,10 @@ function AppInner() {
         )}
 
         {retired && <BanScreen car={car} result={retired} onGarage={backToGarage} />}
+
+        {ticket && !retired && (
+          <SpeedTicketCard ticket={ticket} onClose={() => setTicket(null)} />
+        )}
       </div>
     </div>
   );

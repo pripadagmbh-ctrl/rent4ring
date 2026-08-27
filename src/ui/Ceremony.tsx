@@ -174,6 +174,20 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
             </div>
             <div className="stat__label">Damage bill</div>
           </div>
+          {/* Only shown when there is one — an empty zero here would imply
+              the village camera fires on every run, and it does not. */}
+          {result.finesEuro > 0 && (
+            <div className="stat">
+              <div className="stat__value" style={{ color: '#ff6a5a' }}>
+                {result.finesEuro.toLocaleString('en-GB', {
+                  style: 'currency',
+                  currency: 'EUR',
+                  maximumFractionDigits: 0,
+                })}
+              </div>
+              <div className="stat__label">Speeding fines</div>
+            </div>
+          )}
         </div>
 
         {/* Settling up: the deposit hold comes off, the bill goes on. He runs

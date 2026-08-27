@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLEET, type Car } from '../data/fleet';
 import { GarageScene } from '../game/GarageScene';
 import { farewellLine, garageLines, type MuellerLine } from '../data/muellerLines';
+import { DALE_GARAGE } from '../data/daleTips';
 import { formatLap } from './format';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
 import CardReader from './CardReader';
+import Dale from './Dale';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -59,6 +61,8 @@ export default function Garage({
   const [farewell, setFarewell] = useState<MuellerLine | null>(null);
   /** The deposit swipe, shown over the garage on the way out. */
   const [swiping, setSwiping] = useState(false);
+  /** Dale's line for this visit, picked once so he does not chatter. */
+  const [daleLine] = useState(() => DALE_GARAGE[Math.floor(Math.random() * DALE_GARAGE.length)]);
   const leaveTimer = useRef<number | null>(null);
 
   const lines = garageLines(selected.id);
@@ -227,6 +231,16 @@ export default function Garage({
             </div>
           </div>
           <div className="showroom__hint">Drag to rotate</div>
+
+          {/* Dale is on the floor too — he is riding with you, so he
+              introduces himself before you pick anything. */}
+          <div className="showroom__dale">
+            <Dale className="showroom__dale-fig" />
+            <div className="showroom__dale-speech">
+              <span className="showroom__dale-who">Dale · Instructor</span>
+              {daleLine}
+            </div>
+          </div>
 
           {/* Herr Müller mans the showroom floor and talks you through the car. */}
           <div className={`showroom__mueller ${farewell ? 'showroom__mueller--leaving' : ''}`}>

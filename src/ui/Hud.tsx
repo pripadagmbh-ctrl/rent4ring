@@ -2,6 +2,7 @@ import type { HudState } from '../game/Game';
 import { formatDelta, formatDistance, formatLap } from './format';
 import Minimap from './Minimap';
 import MuellerPanel from './MuellerPanel';
+import Dale from './Dale';
 
 interface Props {
   hud: HudState;
@@ -133,6 +134,31 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
         <div className="instrument__value">{hud.instrument.value}</div>
         <div className="instrument__label">{hud.instrument.label}</div>
       </div>
+
+      {/* Dale, calling the next corner from the passenger seat. Bottom
+          centre, where the eye already is on the road ahead — and only while
+          he is actually saying something. */}
+      {hud.dale && (
+        <div
+          className={`dale-call dale-call--${hud.dale.kind} ${hud.dale.apologising ? 'is-aside' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          <Dale
+            className="dale-call__fig"
+            urgent={hud.dale.kind !== 'line'}
+            sheepish={hud.dale.apologising}
+          />
+          <div className="dale-call__body">
+            <span className="dale-call__who">
+              {hud.dale.apologising ? 'Dale → Herr Müller' : 'Dale'}
+            </span>
+            <span key={hud.dale.text} className="dale-call__text">
+              {hud.dale.text}
+            </span>
+          </div>
+        </div>
+      )}
 
       {!onApproach && <Minimap carPos={hud.carPos} ghostPos={hud.ghostPos} />}
 

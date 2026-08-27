@@ -14,10 +14,12 @@ import { type CarMesh } from './carMesh';
 import { buildVehicleMesh } from './vehicleMesh';
 import { buildTowTruck, type TowTruck } from './towTruck';
 import { buildCrowd, type Crowd } from './crowd';
+import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
+import { DALE_APOLOGIES, tipFor, type DaleTip } from '../data/daleTips';
 import { departureRoute, departureSpeedAt, fleetParkingSpots, homeBaseFrame, toWorld, YARD_Y, type DepartureRoute } from './departure';
 import { FLEET } from '../data/fleet';
 
@@ -40,6 +42,8 @@ export interface LapResult {
   damage: number;
   /** Earned discount, 0–10 percent. */
   discountPercent: number;
+  /** Speeding fines picked up on the public road, euros. */
+  finesEuro: number;
 }
 
 /**
@@ -47,6 +51,18 @@ export interface LapResult {
  * the HUD presents it as part of the approach.
  */
 export type Phase = 'departure' | 'approach' | 'outlap' | 'timing' | 'retired';
+
+/** A speeding ticket from the village camera on the way to the circuit. */
+export interface SpeedTicket {
+  limitKmh: number;
+  measuredKmh: number;
+  /** After the statutory tolerance has been deducted. */
+  chargedKmh: number;
+  overBy: number;
+  fineEuro: number;
+  points: number;
+  banMonths: number;
+}
 
 /** Handed to the UI when the damage bar fills and the drive is over. */
 export interface Retirement {
@@ -92,6 +108,8 @@ export interface HudState {
    * hard it is leaning on the tyres. See `instrumentReadout`.
    */
   instrument: { label: string; value: string };
+  /** Dale's current call from the passenger seat, or null when he is quiet. */
+  dale: { text: string; kind: DaleTip['kind']; apologising: boolean } | null;
 }
 
 const SECTOR_BOUNDS = [
@@ -129,6 +147,8 @@ export interface GameCallbacks {
   onLapComplete(result: LapResult): void;
   /** The damage bar filled: black flag, recovery truck, and out. */
   onRetired(result: Retirement): void;
+  /** Caught by the village speed camera on the public road. */
+  onTicket(ticket: SpeedTicket): void;
   /**
    * The send-off Herr Müller gave in the garage. Starting straight from the
    * menu skips the garage, so the drive picks its own when this is absent.
@@ -200,6 +220,24 @@ export class Game {
   private contacts = 0;
   private topSpeed = 0;
   private lastGear = 1;
+
+  // ------------------------------------------------------------- the law
+  /** The Starenkasten in the village, and whether it has had you yet. */
+  private speedCamera: SpeedCamera | null = null;
+  private ticketed = false;
+  /** Running total of fines, kept apart from the repair bill. */
+  private fines = 0;
+
+  // ---------------------------------------------------------------- Dale
+  /** What he is saying, and for how much longer. */
+  private daleLine: { text: string; kind: DaleTip['kind']; apologising: boolean } | null = null;
+  private daleHold = 0;
+  /** The section his last call was for, so one corner gets one call. */
+  private daleSection = '';
+  /** Rotates his alternatives, so a second lap is not a repeat of the first. */
+  private daleVariant = 0;
+  /** He does not apologise for every scrape. */
+  private daleApologyCooldown = 0;
 
   // ---------------------------------------------------------- retirement
   /** The regulars stood in the yard, waving the car out. */
@@ -336,6 +374,19 @@ export class Game {
     // Herr Müller's regulars, stood in front of the shed to see you off. The
     // crowd is built in its own local frame, so it only needs the yard's
     // position and heading to be dropped into place.
+    // The Starenkasten, on the straightest stretch of the village road —
+    // 276 m out, where the road opens up and the limit is the last thing on
+    // anyone's mind. Measured off the route: index 46 turns 0.8 degrees over
+    // fifteen points, the straightest run on the whole approach.
+    const camPoint = this.approach.at(SPEED_CAMERA_INDEX);
+    const starenkasten = buildSpeedCamera();
+    starenkasten.group.position
+      .copy(camPoint.pos)
+      .addScaledVector(camPoint.normal, -(camPoint.halfWidth + 1.6));
+    starenkasten.group.rotation.y = Math.atan2(camPoint.tangent.x, camPoint.tangent.z);
+    this.scene.add(starenkasten.group);
+    this.speedCamera = starenkasten;
+
     const yard = homeBaseFrame(this.approach);
     const crowd = buildCrowd();
     crowd.group.position.copy(toWorld(yard, 0, YARD_Y, 0));
@@ -450,6 +501,8 @@ export class Game {
     this.towTruck = null;
     this.crowd?.dispose();
     this.crowd = null;
+    this.speedCamera?.dispose();
+    this.speedCamera = null;
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
     this.renderer.dispose();
@@ -556,6 +609,7 @@ export class Game {
     this.lastGear = this.vehicle.gear;
 
     if (this.phase === 'approach') {
+      this.checkSpeedCamera();
       this.updateApproach();
     } else {
       if (this.phase === 'timing') this.lapTime += dt;
@@ -564,6 +618,7 @@ export class Game {
     }
 
     this.updateMood(dt);
+    this.updateDale(dt);
   }
 
   // ------------------------------------------------------------- damage
@@ -598,6 +653,7 @@ export class Game {
     }
 
     if (v > 4) {
+      this.daleApologise();
       this.setMood('angry', pick(this.ranting.angry), 5);
     } else if (this.mood !== 'angry') {
       this.setMood(
@@ -619,6 +675,83 @@ export class Game {
     return this.car.bike
       ? { angry: SELF_ANGRY_LINES, retired: SELF_RETIRED_LINES }
       : { angry: ANGRY_LINES, retired: RETIRED_LINES };
+  }
+
+  // ------------------------------------------------------------- the law
+  /**
+   * The village camera. On the public road the StVO applies, whatever is in
+   * the garage behind you.
+   *
+   * Triggered on passing the post rather than on a radius, so creeping past
+   * it slowly and then flooring it does not count — same as the real thing.
+   * The statutory tolerance is deducted before the fine: 3 km/h below 100,
+   * 3 per cent above it.
+   */
+  private checkSpeedCamera(): void {
+    if (this.ticketed || !this.speedCamera) return;
+    const i = this.vehicle.trackIndex;
+    if (i < SPEED_CAMERA_INDEX || i > SPEED_CAMERA_INDEX + 3) return;
+
+    const measured = this.telemetry?.speedKmh ?? 0;
+    const charged = measured - (measured <= 100 ? 3 : measured * 0.03);
+    const over = Math.round(charged - VILLAGE_LIMIT_KMH);
+    this.ticketed = true;
+    if (over <= 0) return;
+
+    const { fine, points, banMonths } = penaltyFor(over);
+    this.fines += fine;
+    this.speedCamera.trigger();
+    this.setMood('angry', pick(TICKET_LINES), 6);
+    this.callbacks.onTicket({
+      limitKmh: VILLAGE_LIMIT_KMH,
+      measuredKmh: Math.round(measured),
+      chargedKmh: Math.round(charged),
+      overBy: over,
+      fineEuro: fine,
+      points,
+      banMonths,
+    });
+  }
+
+  // ---------------------------------------------------------------- Dale
+  /**
+   * His call for whatever is coming, said early enough to act on.
+   *
+   * The look-ahead is a time, not a distance: a call two hundred metres out
+   * is ample warning in a MINI and far too late in the Taycan. Three seconds
+   * of travel puts it in the same place relative to the corner whatever you
+   * are driving, with a floor so it still works at walking pace.
+   */
+  private updateDale(dt: number): void {
+    this.daleHold = Math.max(0, this.daleHold - dt);
+    this.daleApologyCooldown = Math.max(0, this.daleApologyCooldown - dt);
+    if (this.daleHold <= 0 && this.daleLine && !this.daleLine.apologising) this.daleLine = null;
+    if (this.daleHold <= 0 && this.daleLine?.apologising) this.daleLine = null;
+
+    if (this.phase === 'departure' || this.phase === 'approach' || this.phase === 'retired') return;
+
+    const lookAheadM = Math.max(80, (this.vehicle.speed || 0) * DALE_LOOKAHEAD_SECONDS);
+    const ahead = Math.round(lookAheadM / this.track.spacing);
+    const coming = this.track.sectionNameAt(this.vehicle.trackIndex + ahead);
+    if (coming === this.daleSection) return;
+
+    this.daleSection = coming;
+    const tip = tipFor(coming, this.daleVariant);
+    if (!tip) return;
+    // A fresh apology outranks a corner call; otherwise he takes the corner.
+    if (this.daleLine?.apologising && this.daleHold > 0) return;
+    this.daleLine = { text: tip.text, kind: tip.kind, apologising: false };
+    this.daleHold = DALE_DWELL_SECONDS;
+  }
+
+  /** He takes the blame with Herr Müller, which is not the same as with you. */
+  private daleApologise(): void {
+    if (this.daleApologyCooldown > 0) return;
+    this.daleApologyCooldown = DALE_APOLOGY_GAP_SECONDS;
+    this.daleLine = { text: pick(DALE_APOLOGIES), kind: 'warn', apologising: true };
+    this.daleHold = DALE_DWELL_SECONDS;
+    // He has stopped talking about the corner, so let the next one speak up.
+    this.daleSection = '';
   }
 
   // ---------------------------------------------------------- retirement
@@ -871,6 +1004,7 @@ export class Game {
       damageCost: Math.round(this.damageCost),
       damage: this.damage,
       discountPercent: discountFor(time, this.car.targetLapSec, this.damageCost),
+      finesEuro: Math.round(this.fines),
     };
 
     if (personalBest) {
@@ -1038,6 +1172,7 @@ export class Game {
     // They wave the car out of the yard and then get on with their morning —
     // an arm going up and down for twenty kilometres would be unnerving.
     if (this.crowd && this.phase === 'departure') this.crowd.update(this.elapsed);
+    this.speedCamera?.update(dt);
 
     const v = this.vehicle;
     const g = this.carMesh.group;
@@ -1245,6 +1380,7 @@ export class Game {
       muellerLine: this.moodLine,
       reversing: this.vehicle.vLong < -0.2,
       instrument: this.instrumentReadout(t),
+      dale: this.daleLine,
     });
   }
 
@@ -1418,6 +1554,49 @@ const FLOW_LINES = [
  * What he says once the damage bar is full and the car is his problem. Read
  * in order, not at random — it is one rant, and it escalates.
  */
+/**
+ * Where the village camera stands, as an approach index. Index 46 is 276 m
+ * from the yard and the straightest run on the whole route — 0.8 degrees of
+ * direction change over fifteen points.
+ */
+const SPEED_CAMERA_INDEX = 46;
+/** Built-up area, so 50. */
+const VILLAGE_LIMIT_KMH = 50;
+
+/**
+ * The German fine table for a car inside a built-up area, 2021 onwards.
+ * Real numbers, because an invented one would be the least believable thing
+ * in a game that surveys the circuit off OpenStreetMap.
+ */
+function penaltyFor(over: number): { fine: number; points: number; banMonths: number } {
+  if (over <= 10) return { fine: 30, points: 0, banMonths: 0 };
+  if (over <= 15) return { fine: 50, points: 0, banMonths: 0 };
+  if (over <= 20) return { fine: 70, points: 0, banMonths: 0 };
+  if (over <= 25) return { fine: 115, points: 1, banMonths: 0 };
+  if (over <= 30) return { fine: 180, points: 1, banMonths: 1 };
+  if (over <= 40) return { fine: 260, points: 2, banMonths: 1 };
+  if (over <= 50) return { fine: 400, points: 2, banMonths: 1 };
+  if (over <= 60) return { fine: 560, points: 2, banMonths: 2 };
+  if (over <= 70) return { fine: 700, points: 2, banMonths: 3 };
+  return { fine: 800, points: 2, banMonths: 3 };
+}
+
+/** What Herr Müller has to say about it. */
+const TICKET_LINES = [
+  'That was a camera. In a village. On my insurance.',
+  'Fifty means fifty. It is written on a large round sign.',
+  'Wonderful. A photograph of my car, and your right foot.',
+  'The circuit is that way. The village is not part of it.',
+  'They post those to me, you know. With my name on them.',
+];
+
+/** How far ahead Dale reads the road, in seconds of travel. */
+const DALE_LOOKAHEAD_SECONDS = 3;
+/** How long one of his calls stays up. */
+const DALE_DWELL_SECONDS = 4.5;
+/** He apologises to Müller at most this often. */
+const DALE_APOLOGY_GAP_SECONDS = 18;
+
 /** How far back up the road the recovery truck appears, metres. */
 const TOW_APPROACH_M = 85;
 /** How long it takes to come up and stop behind the wreck. */
