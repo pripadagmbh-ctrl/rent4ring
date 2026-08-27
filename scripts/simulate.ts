@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { RoadPath, Track } from '../src/game/track';
-import { Vehicle } from '../src/game/physics';
+import { Vehicle, maxSteerAngle } from '../src/game/physics';
 import { FLEET } from '../src/data/fleet';
 
 const G = 9.81;
@@ -81,7 +81,9 @@ function driveLap(carIndex: number, assists: boolean) {
     // Steering angle that would arc the car onto the target point, left-positive.
     const desiredDelta = Math.atan2(2 * car.wheelbase * Math.sin(angle), dist);
     // The physics limits lock with speed; normalise against the same curve.
-    const maxSteer = Math.max(0.055, Math.min(0.58, 0.58 / (1 + speed * 0.045)));
+    // Same law the car uses, imported rather than copied — a second copy
+    // here would go stale the moment the steering changes.
+    const maxSteer = maxSteerAngle(speed, car.grip, car.wheelbase);
     // DriveInput.steer is right-positive, so both terms flip sign here.
     // Only fight back towards the road once the car is running out of asphalt,
     // otherwise this would cancel out the racing line.
