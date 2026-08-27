@@ -3,6 +3,7 @@ import type { Approach, RoadPath, Track } from './track';
 import {
   CLOSED_DOOR_X,
   DIP,
+  FLEET_APRON,
   LINK,
   OPEN_DOOR,
   PLATEAU,
@@ -452,6 +453,10 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
 
   // Sunken forecourt in front of the shed.
   slab(tarmacMat, YARD.minX, YARD.maxX, YARD.minZ, YARD.maxZ, YARD_Y, 0.3);
+  // Parking apron for the rest of the fleet, along the ramp's south flank.
+  // Thick like the plateau, not a 0.3 m sheet: the ground falls away from the
+  // road out here, so a thin slab would visibly float at its east end.
+  slab(tarmacMat, FLEET_APRON.minX, FLEET_APRON.maxX, FLEET_APRON.minZ, FLEET_APRON.maxZ, YARD_Y, 4);
 
   // The ramp climbs in +x, out of the dip and up to street level.
   const rise = ROAD_Y - YARD_Y;
@@ -475,8 +480,14 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
   const wall = (minX: number, maxX: number, minZ: number, maxZ: number) =>
     slab(bankMat, minX, maxX, minZ, maxZ, ROAD_Y + 0.15, DIP + 0.6);
   wall(YARD.minX - 0.6, YARD.minX, YARD.minZ, YARD.maxZ);
-  wall(YARD.minX, YARD.maxX, YARD.minZ - 0.6, YARD.minZ);
-  wall(YARD.maxX, YARD.maxX + 0.6, YARD.minZ, RAMP.minZ);
+  // Back wall runs the full width now, since the parking apron continues the
+  // yard level eastwards past the forecourt.
+  wall(YARD.minX, FLEET_APRON.maxX, YARD.minZ - 0.6, YARD.minZ);
+  // The old east wall sat at the forecourt edge; the apron is ground now, so
+  // only the sliver between apron and ramp still needs holding back...
+  wall(YARD.maxX, YARD.maxX + 0.6, FLEET_APRON.maxZ, RAMP.minZ);
+  // ...and the retaining edge moves out to the apron's own east side.
+  wall(FLEET_APRON.maxX, FLEET_APRON.maxX + 0.6, FLEET_APRON.minZ, FLEET_APRON.maxZ);
 
   // ------------------------------------------------------------- the shed
   // Built as walls rather than one solid block: the car starts inside it and

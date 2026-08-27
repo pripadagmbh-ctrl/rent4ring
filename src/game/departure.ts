@@ -55,6 +55,46 @@ export const PLATEAU = { minX: 19, maxX: 26, minZ: 8, maxZ: 24 };
 export const LINK = { minX: -9.5, maxX: 20, minZ: 17.5, maxZ: 25.5 };
 
 /**
+ * Where the rest of the fleet is parked: a yard-level apron along the south
+ * flank of the ramp. The only sizeable free ground next to the climb — the
+ * ramp's other flank is the link lane coming back from the turning head, and
+ * the forecourt itself has to stay clear for the car pulling out. Ends at
+ * x=21, i.e. 33 m off the road centreline, comfortably inside the 40 m the
+ * approach lays ground out to.
+ */
+export const FLEET_APRON = { minX: 8.5, maxX: 25, minZ: -7, maxZ: 6 };
+
+/**
+ * Centre of the parking row, and how far apart the cars stand. The row has
+ * to clear the shed's east wall (x = SHED.halfX) — start it any further west
+ * and the first cars stand inside the building.
+ */
+const PARK_Z = 0.5;
+const PARK_FIRST_X = 10.2;
+const PARK_SPACING = 2.45;
+
+export interface ParkingSpot {
+  position: THREE.Vector3;
+  yaw: number;
+}
+
+/**
+ * Parking spots for `count` cars, nose pointing at the forecourt (local +z)
+ * so the row faces the driver coming out of the shed.
+ */
+export function fleetParkingSpots(approach: Approach, count: number): ParkingSpot[] {
+  const frame = homeBaseFrame(approach);
+  const spots: ParkingSpot[] = [];
+  for (let i = 0; i < count; i++) {
+    spots.push({
+      position: toWorld(frame, PARK_FIRST_X + i * PARK_SPACING, YARD_Y, PARK_Z),
+      yaw: frame.yaw,
+    });
+  }
+  return spots;
+}
+
+/**
  * Where the camera stands to watch the car come out of the shed, up the ramp
  * and round the U-turn. Two earlier positions were both diagnosed by pixel-
  * sampling the actual render, not just checking clearance:
