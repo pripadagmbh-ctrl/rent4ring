@@ -15,6 +15,7 @@ import { buildVehicleMesh } from './vehicleMesh';
 import { buildTowTruck, type TowTruck } from './towTruck';
 import { buildCrowd, type Crowd } from './crowd';
 import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
+import { buildSkidMarks, type SkidMarks } from './skidmarks';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -224,6 +225,7 @@ export class Game {
   // ------------------------------------------------------------- the law
   /** The Starenkasten in the village, and whether it has had you yet. */
   private speedCamera: SpeedCamera | null = null;
+  private skidMarks: SkidMarks | null = null;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
@@ -387,6 +389,12 @@ export class Game {
     this.scene.add(starenkasten.group);
     this.speedCamera = starenkasten;
 
+    // Rubber on the road. Added to the scene rather than to the car, because
+    // the marks stay where they were laid while the car drives away.
+    const marks = buildSkidMarks();
+    this.scene.add(marks.mesh);
+    this.skidMarks = marks;
+
     const yard = homeBaseFrame(this.approach);
     const crowd = buildCrowd();
     crowd.group.position.copy(toWorld(yard, 0, YARD_Y, 0));
@@ -502,6 +510,7 @@ export class Game {
     this.crowd?.dispose();
     this.crowd = null;
     this.speedCamera?.dispose();
+    this.skidMarks?.dispose();
     this.speedCamera = null;
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
@@ -1178,6 +1187,46 @@ export class Game {
   }
 
   // -------------------------------------------------------------- visuals
+  /**
+   * Puts the four contact patches where the wheels actually are and hands them
+   * to the mark buffer. The positions come from the vehicle's own frame rather
+   * than from the wheel meshes: the meshes carry steering and spin, and a
+   * contact patch does neither.
+   */
+  private layRubber(): void {
+    const marks = this.skidMarks;
+    const t = this.telemetry;
+    if (!marks || !t || this.phase === 'departure') return;
+
+    const v = this.vehicle;
+    const fwd = v.forward;
+    const left = v.left;
+    const halfTrack = this.car.size[1] * 0.42;
+    const front = this.car.wheelbase * 0.5;
+    const y = v.position.y;
+
+    let n = 0;
+    for (const along of [front, -front]) {
+      for (const across of [halfTrack, -halfTrack]) {
+        const p = this.rubberPoints[n++];
+        p.set(
+          v.position.x + fwd.x * along + left.x * across,
+          y,
+          v.position.z + fwd.z * along + left.z * across,
+        );
+      }
+    }
+    marks.update(this.rubberPoints, fwd, t.gripUsage, t.speedKmh);
+  }
+
+  /** Reused every frame; the mark buffer must not allocate in the hot loop. */
+  private readonly rubberPoints = [
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+  ];
+
   private updateVisuals(dt: number): void {
     this.elapsed += dt;
     // They wave the car out of the yard and then get on with their morning —
@@ -1205,6 +1254,7 @@ export class Game {
     brakeMat.color.setHex(this.input.state.brake > 0.06 ? 0xff2a1a : 0x3a0806);
 
     this.carMesh.setDamage(this.damage);
+    this.layRubber();
 
     if (this.ghostMesh && this.ghostBest && this.phase === 'timing') {
       const sample = this.ghostSampleAt(this.lapTime);

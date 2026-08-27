@@ -54,6 +54,15 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Geändert
 
+- **Reifenspuren auf der Strecke.** Wo die Reifen loslassen, bleibt Gummi
+  liegen — gesteuert von derselben Grip-Zahl wie das Quietschen, damit Bild und
+  Ton nie etwas Unterschiedliches behaupten. Als ein vorab angelegter
+  Ringpuffer gebaut, der nach dem Start nichts mehr allokiert.
+- **Schäden am Auto deutlich sichtbarer.** Kleine Anbauteile — Splitter,
+  Grill, Scheinwerfer, Flügel — verziehen sich jetzt stärker als die Karosse,
+  weil ein Rempler genau die zuerst erwischt. Bis zu 10,5 cm Versatz statt
+  4,5 cm, dazu bis zu 10° Verdrehung und knapp 10 % Stauchung, und der Lack
+  geht in Richtung blankes, mattes Blech statt nur etwas dunkler zu werden.
 - **Areal um 1,7° eingedreht**, um die Einmündung statt um die Halle — das
   Grundstück steht nicht mehr im rechten Winkel zur Burgstraße.
 - **Wendehammer und Verbindungsfahrbahn neu zugeschnitten.** Beide lagen
@@ -88,6 +97,15 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
   Hallenbeleuchtung, Wandclipping der Ausfahrtkamera, durch die Fahrbahn
   sichtbarer Himmel an Hängen, schwebende Leitplankenpfosten, Hecken quer über
   dem Asphalt.
+- **Lenkung fiel aus oder machte sich selbstständig.** `readGamepad` nahm
+  ersatzweise das erste angeschlossene Gerät, auch ohne Standard-Mapping —
+  dort sind die Indizes aber beliebig: `buttons[7]` konnte am Gas kleben,
+  `buttons[0]` die Handbremse halten und `axes[0]` irgendeine Achse abseits
+  der Mitte sein. Da die Pad-Achse die Tastatur überstimmt, sobald sie größer
+  ist, und die Tastatur ohne Tastendruck bei null liegt, hat ein driftender
+  Stick das Auto von allein gelenkt. Jetzt nur noch Standard-Mapping, mit
+  gelerntem Ruhewert und einer Aufweck-Schwelle: ein Controller, den niemand
+  anfasst, fährt nicht mehr mit.
 - **Sound auf Smartphones.** Der AudioContext wird jetzt in der Nutzergeste
   entsperrt, sonst blieb das Spiel auf iOS stumm.
 

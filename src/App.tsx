@@ -304,6 +304,13 @@ function AppInner() {
                     real state turns that into something reportable. */}
                 <br />
                 <small style={{ color: 'var(--muted)' }}>Audio: {audioStatus()}</small>
+                {/* Same reasoning as the audio line: a car that steers itself
+                    cannot be diagnosed from the driver's seat, so the pause
+                    screen says what the game thinks is being pressed. */}
+                <br />
+                <small style={{ color: 'var(--muted)' }}>
+                  Input: {gameRef.current?.input.diagnostic() ?? 'not started'}
+                </small>
               </p>
               <div className="dialog__actions">
                 <button className="btn-primary" onClick={() => setPaused(false)}>
