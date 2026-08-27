@@ -293,8 +293,11 @@ export function buildApproachWorld(approach: Approach, track: Track): WorldHandl
   disposables.push(dashMat, dashGeo);
   const dashes: THREE.Matrix4[] = [];
   const dummy = new THREE.Object3D();
+  const ra = approach.roundabout;
   for (let i = 4; i < approach.count - 4; i += 3) {
     const p = approach.at(i);
+    // No centre line around the ring — a roundabout is one-way.
+    if (Math.hypot(p.pos.x - ra.x, p.pos.z - ra.z) < ra.radius + 8) continue;
     dummy.position.set(p.pos.x, p.pos.y + 0.02, p.pos.z);
     dummy.rotation.set(-Math.PI / 2, 0, -Math.atan2(p.tangent.x, p.tangent.z));
     dummy.updateMatrix();
@@ -302,10 +305,114 @@ export function buildApproachWorld(approach: Approach, track: Track): WorldHandl
   }
   instance(dashGeo, dashMat, dashes, root, disposables);
 
+  buildRoundabout(approach, root, disposables, asphaltMat);
+
   buildVillage(approach, root, disposables, clearance);
   buildHomeBase(approach, root, disposables);
 
   return { root, dispose: () => disposables.forEach((d) => d.dispose()) };
+}
+
+// =====================================================================
+// The B258 roundabout on the way to the circuit
+// =====================================================================
+/**
+ * The route already curves round the real roundabout, but a bare ribbon just
+ * reads as a bend — the island is what makes it recognisable as one.
+ *
+ * The island radius is measured off the driving line rather than the OSM ring
+ * radius: resampling and smoothing move the route a little, and taking the
+ * closest the route actually passes guarantees the kerb can never end up on
+ * the drivable surface.
+ */
+function buildRoundabout(
+  approach: Approach,
+  root: THREE.Group,
+  disposables: { dispose(): void }[],
+  asphaltMat: THREE.Material,
+): void {
+  const ra = approach.roundabout;
+
+  let nearest = Infinity;
+  let centreY = 0;
+  let laneHalfWidth = 3.1;
+  for (let i = 0; i < approach.count; i++) {
+    const p = approach.at(i);
+    const d = Math.hypot(p.pos.x - ra.x, p.pos.z - ra.z);
+    if (d < nearest) {
+      nearest = d;
+      centreY = p.pos.y;
+      laneHalfWidth = p.halfWidth;
+    }
+  }
+  // Back off the lane edge plus a little, and keep a sane floor in case the
+  // route ever gets smoothed much closer to the middle than it is today.
+  const islandR = Math.max(3, nearest - laneHalfWidth - 0.6);
+
+  const group = new THREE.Group();
+  group.position.set(ra.x, centreY, ra.z);
+
+  // The full ring of asphalt. The driven route only wraps ~136° of it (one
+  // entry, one exit), so without this the island sits in grass on its far
+  // side and the whole thing reads as a bend rather than a roundabout.
+  // Slightly below the route ribbon, which then wins where the two overlap.
+  const ringGeo = new THREE.RingGeometry(islandR, islandR + laneHalfWidth * 2, 48);
+  disposables.push(ringGeo);
+  const ring = new THREE.Mesh(ringGeo, asphaltMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = -0.03;
+  ring.receiveShadow = true;
+  group.add(ring);
+
+  const kerbMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.9 });
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x51733a, roughness: 1 });
+  disposables.push(kerbMat, grassMat);
+
+  // Kerb ring, then the planting sitting just inside and above it.
+  const kerbGeo = new THREE.CylinderGeometry(islandR, islandR, 0.28, 40);
+  disposables.push(kerbGeo);
+  const kerb = new THREE.Mesh(kerbGeo, kerbMat);
+  kerb.position.y = 0.14;
+  kerb.receiveShadow = true;
+  group.add(kerb);
+
+  const innerR = Math.max(1.5, islandR - 0.7);
+  const grassGeo = new THREE.CylinderGeometry(innerR, innerR, 0.34, 36);
+  disposables.push(grassGeo);
+  const grass = new THREE.Mesh(grassGeo, grassMat);
+  grass.position.y = 0.24;
+  grass.receiveShadow = true;
+  group.add(grass);
+
+  // A low mound with a few conifers, the way these islands are usually
+  // planted around here.
+  const moundGeo = new THREE.ConeGeometry(innerR * 0.8, 1.6, 20);
+  disposables.push(moundGeo);
+  const mound = new THREE.Mesh(moundGeo, grassMat);
+  mound.position.y = 0.4 + 0.8;
+  group.add(mound);
+
+  const trunkGeo = new THREE.CylinderGeometry(0.16, 0.24, 2.2, 5);
+  const crownGeo = new THREE.ConeGeometry(1.5, 5.5, 7);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1 });
+  const crownMat = new THREE.MeshStandardMaterial({ color: 0x3f5a2e, roughness: 1 });
+  disposables.push(trunkGeo, crownGeo, trunkMat, crownMat);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const r = innerR * 0.42;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.set(x, 1.5, z);
+    trunk.castShadow = true;
+    group.add(trunk);
+    const crown = new THREE.Mesh(crownGeo, crownMat);
+    crown.position.set(x, 4.6, z);
+    crown.castShadow = true;
+    group.add(crown);
+  }
+
+  root.add(group);
 }
 
 // =====================================================================
@@ -340,6 +447,7 @@ function buildVillage(
 
   // Houses only line the first stretch — the village gives way to open Eifel.
   const villageEnd = Math.floor(approach.count * 0.55);
+  const ra = approach.roundabout;
   for (let i = 4; i < villageEnd; i += 5) {
     for (const side of [1, -1]) {
       // The left of the first stretch belongs to the Rent4Ring yard.
@@ -353,6 +461,9 @@ function buildVillage(
       // overhang) can never lean into the carriageway or the chase camera.
       const off = p.halfWidth + 6 + w / 2 + rand() * 5;
       const pos = p.pos.clone().addScaledVector(p.normal, side * off);
+      // The route curves hard around the roundabout, which throws the offset
+      // placement straight onto the junction — keep the whole thing clear.
+      if (Math.hypot(pos.x - ra.x, pos.z - ra.z) < ra.radius + 22) continue;
       const yaw = Math.atan2(p.tangent.x, p.tangent.z) + (rand() - 0.5) * 0.25;
 
       dummy.position.set(pos.x, pos.y + h / 2 - 0.4, pos.z);
@@ -892,9 +1003,14 @@ function buildStartLine(track: Track, root: THREE.Group, disposables: { dispose(
 // from the start/finish line and looms over the village.
 // =====================================================================
 function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): void {
-  // Projected from 50.3333 N, 6.9417 E into the shared track frame.
-  const CX = -1478;
-  const CZ = 3418;
+  // Projected from the castle's real position, 50.3455988 N, 6.9534284 E,
+  // into the shared track frame. The old 50.3333 N / 6.9417 E put it 1.6 km
+  // to the south-west, which is why it never showed above Nürburg: from the
+  // yard it sat 1343 m away — behind the village roofs and past the fog's
+  // 1500 m cutoff. It actually stands 305 m from Burgstraße 1 and ~78 m
+  // above it, so it looms over the whole approach, as it does in reality.
+  const CX = -645;
+  const CZ = 2049;
   // Track datum y=0 is 320 m above sea level; the castle rock tops out at 678 m.
   const HILL_TOP = 678 - 320;
   const HILL_BASE = HILL_TOP - 92;

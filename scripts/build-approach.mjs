@@ -196,11 +196,30 @@ for (let k = 0; k <= count; k++) {
   resampled.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
 }
 
+// Roundabout centre and radius, in the shared metric frame. Needed before
+// smoothing (to protect the ring arc) and again at the end (for the world to
+// build the island).
+const raProjected = roundabout.geometry.map((p) => project(p.lat, p.lon));
+const raCentre = raProjected.reduce(
+  (a, p) => ({ x: a.x + p.x / raProjected.length, z: a.z + p.z / raProjected.length }),
+  { x: 0, z: 0 },
+);
+const raRadius =
+  raProjected.reduce((a, p) => a + Math.hypot(p.x - raCentre.x, p.z - raCentre.z), 0) /
+  raProjected.length;
+
 // Open polyline, so keep the endpoints pinned while smoothing the interior.
+// Points on the roundabout are pinned too: the first exit is only a ~39°
+// bite of the ring, barely 10 m of arc, and four smoothing passes flattened
+// it into a wide sweep that missed the island entirely — the junction then
+// read as an ordinary bend. The surveyed ring geometry is exactly what
+// should survive here.
+const onRing = (p) => Math.hypot(p.x - raCentre.x, p.z - raCentre.z) < raRadius + 6;
 let smoothed = resampled;
 for (let pass = 0; pass < 4; pass++) {
   const next = smoothed.slice();
   for (let i = 1; i < smoothed.length - 1; i++) {
+    if (onRing(smoothed[i])) continue;
     next[i] = {
       x: smoothed[i].x * 0.4 + (smoothed[i - 1].x + smoothed[i + 1].x) * 0.3,
       z: smoothed[i].z * 0.4 + (smoothed[i - 1].z + smoothed[i + 1].z) * 0.3,
@@ -282,6 +301,16 @@ const points = smoothed.map((p, i) => ({
 let length = 0;
 for (let i = 0; i < points.length - 1; i++) length += dist2(points[i], points[i + 1]);
 
+// Hand the roundabout on, so the world can build a real island there instead
+// of leaving the route to read as a plain bend.
+console.log(
+  'roundabout centre',
+  raCentre.x.toFixed(1),
+  raCentre.z.toFixed(1),
+  'radius',
+  raRadius.toFixed(1),
+);
+
 const out = {
   name: 'Anfahrt',
   from: HOME.label,
@@ -290,6 +319,11 @@ const out = {
   spacing: SPACING,
   joinIndex,
   halfWidth: 3.1,
+  roundabout: {
+    x: +raCentre.x.toFixed(2),
+    z: +raCentre.z.toFixed(2),
+    radius: +raRadius.toFixed(2),
+  },
   points,
 };
 
