@@ -98,16 +98,20 @@ export class RoadPath {
   /** Index access; wraps on a closed path, clamps on an open one. */
   at(i: number): RoadPoint {
     const n = this.points.length;
-    if (this.closed) return this.points[((i % n) + n) % n];
-    return this.points[THREE.MathUtils.clamp(Math.round(i), 0, n - 1)];
+    const idx = Math.round(i);
+    if (this.closed) return this.points[((idx % n) + n) % n];
+    return this.points[THREE.MathUtils.clamp(idx, 0, n - 1)];
   }
 
   /**
    * Nearest centreline index to a world position. `hint` seeds a local search,
    * which is valid because the car moves continuously between frames.
+   * `radiusMetres` is a distance along the path; the point window is derived
+   * from the actual spacing so a resample never silently shrinks the search.
    */
-  nearestIndex(pos: THREE.Vector3, hint: number, radius = 60): number {
+  nearestIndex(pos: THREE.Vector3, hint: number, radiusMetres = 360): number {
     const n = this.points.length;
+    const radius = Math.max(3, Math.round(radiusMetres / this.spacing));
     let best = hint;
     let bestDist = Infinity;
     for (let k = -radius; k <= radius; k++) {
@@ -212,6 +216,12 @@ export class Track extends RoadPath {
     for (let i = 0; i < sectionMeta.length; i++) {
       const start = sectionMeta[i].index;
       const end = sectionMeta[(i + 1) % sectionMeta.length].index;
+      // A zero-length section (both boundaries rounded onto one point) would
+      // otherwise walk the entire ring and overpaint every other section.
+      if (start === end) {
+        sectionOf[start] = sectionMeta[i].name;
+        continue;
+      }
       let cursor = start;
       for (let k = 0; k < n + 1; k++) {
         sectionOf[cursor] = sectionMeta[i].name;

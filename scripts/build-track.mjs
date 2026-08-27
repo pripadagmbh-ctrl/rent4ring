@@ -40,7 +40,7 @@ while (segments.length) {
   ordered.push(seg);
   tail = seg.nodes[seg.nodes.length - 1];
 }
-if (segments.length) console.warn(`WARN: ${segments.length} unstitched segment(s)`);
+if (segments.length) throw new Error(`${segments.length} unstitched segment(s) — the OSM relation no longer forms a single loop; refusing to emit a broken track`);
 
 const nodeIds = [];
 const nameAtIndex = [];
