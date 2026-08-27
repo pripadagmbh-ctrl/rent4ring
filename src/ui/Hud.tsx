@@ -17,6 +17,7 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
   const countdownLabel =
     hud.countdown === null ? null : hud.countdown > 2.2 ? '3' : hud.countdown > 1.2 ? '2' : hud.countdown > 0.2 ? '1' : 'GO';
   const onApproach = hud.phase === 'approach';
+  const blackFlagged = hud.phase === 'retired';
 
   return (
     <div className="hud">
@@ -98,7 +99,18 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
         <div>R — Back on track</div>
       </div>
 
-      {hud.offTrack && hud.countdown === null && <div className="hud__warn">Off track</div>}
+      {hud.offTrack && hud.countdown === null && !blackFlagged && (
+        <div className="hud__warn">Off track</div>
+      )}
+
+      {/* The damage bar filled. He is waving you in, and there is nothing
+          left to do about it. */}
+      {blackFlagged && (
+        <div className="blackflag" role="status">
+          <div className="blackflag__cloth" aria-hidden="true" />
+          <div className="blackflag__label">Black flag &middot; return to the pits</div>
+        </div>
+      )}
 
       <div className={`revbar ${atLimit ? 'revbar--limit' : ''}`}>
         <div className="revbar__fill" style={{ width: `${revPct}%` }} />

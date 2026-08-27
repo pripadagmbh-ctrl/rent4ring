@@ -1611,3 +1611,181 @@
     right: calc(84px + var(--safe-right));
   }
 }
+
+/* ============================================================ black flag */
+/* Shown for the whole retirement sequence. It lives at the bottom centre:
+   the top of the screen belongs to the timing stack and Herr Müller's rant,
+   and the thumb pads that normally sit down here are hidden once the flag is
+   out — there is nothing left to steer. */
+.blackflag {
+  position: absolute;
+  bottom: calc(22px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.blackflag__cloth {
+  width: 104px;
+  height: 70px;
+  background: linear-gradient(105deg, #0a0c0f 0%, #24282f 45%, #05070a 100%);
+  /* A black flag on dark tarmac is nearly invisible, so it gets a bright
+     edge and a pole to read against the road. */
+  border: 2px solid rgba(242, 236, 226, 0.9);
+  border-left-width: 5px;
+  border-left-color: #c9ccd1;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.55);
+  /* Waved by shearing the cloth rather than moving it — a flag pivots about
+     its hoist, so the far edge travels and the near edge barely does. */
+  transform-origin: left center;
+  animation: flag-wave 0.9s ease-in-out infinite;
+}
+
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: skewY(-5deg) rotate(-2deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(5deg) rotate(2deg) scaleX(0.94);
+  }
+}
+
+.blackflag__label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 11px;
+  color: #f2ece2;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blackflag__cloth {
+    animation: none;
+  }
+}
+
+/* ============================================================ ban screen */
+.ban__card {
+  background: var(--panel);
+  border: 1px solid rgba(229, 20, 43, 0.5);
+  border-radius: 18px;
+  padding: 26px 26px 22px;
+  max-width: 560px;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+.ban__flag {
+  width: 74px;
+  height: 50px;
+  background: linear-gradient(105deg, #0a0c0f 0%, #1e2228 45%, #05070a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  margin-bottom: 14px;
+}
+
+.ban__kicker {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 11px;
+  color: var(--red);
+}
+
+.ban__title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.05;
+  margin: 4px 0 12px;
+}
+
+.ban__body {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.ban__figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.ban__figures b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 19px;
+}
+
+.ban__figures span {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ban__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+.ban__fig {
+  width: 118px;
+  flex: none;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+.ban__dog {
+  width: 62px;
+  flex: none;
+  margin-left: -8px;
+}
+
+.ban__speech {
+  flex: 1;
+  min-width: 0;
+  background: #fff;
+  color: #10141a;
+  border-radius: 13px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-left: 6px;
+  margin-bottom: 10px;
+}
+
+.ban__speech strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 3px;
+}
+
+@media (max-width: 620px) {
+  .ban__title {
+    font-size: 26px;
+  }
+  .ban__pair {
+    flex-wrap: wrap;
+  }
+  .ban__speech {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
