@@ -1,146 +1,81 @@
 # STAND.md — Arbeitsstand
 
-Stand: 26.08.2026, Branch `claude/rent4ring-review-0377f5`, per PR #1 nach `main`
-gemergt und über den Pages-Workflow live gestellt. Diese Datei sagt, was erledigt
-ist und wo weitergemacht wird.
-
-## Live-Deployment
-
-`main` deployt automatisch per `.github/workflows/deploy.yml` auf GitHub Pages:
+Stand: 26.08.2026, Branch `claude/rent4ring-review-0377f5`. Alle 13 „hoch"-Befunde aus
+REVIEW.md **und** der komplette restliche M/N-Backlog sind erledigt (der M/N-Teil kam
+über einen parallelen Session-Strang, per PR #2 gemergt). Live auf GitHub Pages:
 <https://pripadagmbh-ctrl.github.io/rent4ring/>
 
-## Merge mit paralleler Session (wichtig fürs Verständnis der Historie)
+## Was gerade lief: Grafikfehler-Rundfahrt (PR #3, gemergt)
 
-Auf `main` hatte eine **zweite, parallele Session** dieselben REVIEW.md-Befunde
-unabhängig umgesetzt (Commits `98f17d1`…`8e2fa62`: H1–H4, H7–H13, M01, M11, M17,
-N01, N04, N07, N21). Der Merge-Commit `60fc97b` vereint beide Stände und
-dokumentiert pro Datei, welche Implementierung gewann und warum. Kurzfassung:
-TouchControls/Ceremony/package.json/.gitignore von dort (M01, M17 samt
-`@types/node` — behebt O1 aus OFFEN.md), Game/audio/Hud/simulate/styles von hier
-(Träger von Müller-Feature, Ausfahrt, H12/M15). `tsc --noEmit` ist seither
-komplett grün.
+Nutzer meldete Grafikfehler „am Anfang der Garage, vor der Rennstrecke und auf der
+Rennstrecke" plus durchsichtige/nicht modelltreue Fahrzeuge. Komplette Erkundungsfahrt
+gemacht, jeweils per pausiertem echten Spielzustand (`game.paused=true` +
+`composer.render()` + Pixel-Sampling des WebGL-Canvas) verifiziert, nicht nur per
+Sichtprüfung — Screenshots direkt nach `click("Drive now")` sind unzuverlässig (zeigen
+teils einen stehengebliebenen/leeren Frame, kein echter Bug).
 
-## Erledigt: alle 13 „hoch"-Befunde aus REVIEW.md
+**Gefunden und behoben:**
+1. **Hallenbeleuchtung überbelichtet** — Punktlicht in `buildHomeBase()` (world.ts) mit
+   Intensität 42 blies zusammen mit dem Bloom-Pass (Threshold 0,86–0,9) das komplette
+   Halleninnere zu einer strukturlosen hellen Fläche aus. Auf 8 reduziert.
+2. **Ausfahrt-Kamera-Komposition** — der feste Establishing-Shot-Anchor in
+   `departure.ts` stand zu nah/zu direkt vor der 5,2 m breiten Tordurchfahrt, sodass die
+   Schuppenwand jede Einstellung dominierte (auch nach Behebung von Punkt 1 noch
+   sichtbar — zwei Fehlversuche dokumentiert im Kommentar über `CAMERA_ANCHOR`).
+   Jetziger Wert `(-9.0, 3.6, 13.5)`: echter 3/4-Shot von der linken, nie befahrenen
+   Hofseite, verifiziert über den gesamten aktiven Bereich u=0–0,40 (Rampe + U-Turn).
+3. **Kamerawechsel zu früh** — Wechsel auf fahrzeugrelative Chase-Kamera lag bei u=0,17,
+   mitten in der engen Rampen-/Kehren-Passage nahe an Stützmauern. Auf u=0,42 angehoben
+   (= `departureSpeedAt`'s Rampe/Verbindungsspur-Grenze).
+4. **Anfahrtsstraße:** Fahrbahn-/Bankett-/Wiesen-Ribbons liefen einseitig (Himmel durch
+   die Fahrbahn an Hängen sichtbar) → `side: THREE.DoubleSide`. Dorfhäuser hatten festen
+   Randabstand unabhängig von der eigenen Breite → skaliert jetzt mit Hausbreite. Hecken
+   22 m lang → schnitten in Kurven über den Asphalt → auf 10 m gekürzt. Die Wiese der
+   ersten 50 m überschnitt Hof/Rampe/Verbindungsspur der Ausfahrt → dort zurückgenommen.
+5. **Leitplanken:** Pfosten nur 1,0 m lang und nur an jedem zweiten Segment → schwebten
+   auf abfallendem Gelände sichtbar über dem Boden. Jetzt 1,9 m, unter Flur einbetoniert,
+   an jedem Segment.
+6. **Fahrzeug-Transparenz/-Modelltreue:** war bereits in einem vorherigen Commit
+   (`876010a`) behoben (opakes statt durchsichtiges Glas) — hier nur verifiziert
+   (GT3 RS, 296 GTB, GR Supra in der Garage geprüft, alle unauffällig).
 
-| # | Befund | Commit |
-|---|--------|--------|
-| H1+H2 | Ghost-Zeitraster-Drift & Sample-Kappung | `c3ec969` |
-| H3 | Kontakt-Entprellung (Game.ts + simulate.ts) | `6bf379a` |
-| H4 | Touch-Input-Reset bei Pause/Ceremony | `14055a4` |
-| H5 | CanvasTexturen-Disposal in world.ts | `a3623fd` |
-| H6 | PMREM-Environment-Leak (Game + GarageScene) | `b4a546e` |
-| H7+H8 | Audio-Mute beim Start, Fanfare auf SFX-Bus | `15397a9` |
-| H9 | Countdown-Schwellen im HUD | `927441e` |
-| H10 | Voucher: Prozentsatz und Code konsistent | `0262413` |
-| H12 | 0–100-Messung in simulate.ts | `0e64e80` |
-| M15 | Dynamischer Bremshorizont (vorgezogen, s. u.) | `1b0af56` |
-| H11 | GR Supra auf 3.0-Sechszylinder vereinheitlicht | `4da36d0` |
-| H13 | iOS-Safe-Area für HUD und Touch-Pads | `2eae763` |
+**Wichtige Lektion für künftige Grafik-Debugging-Sessions in diesem Projekt:** Ein
+naiver Ray-gegen-Welt-AABB-Test liefert bei rotierten Boxen (z. B. die um ~38° gedrehte
+Hofgruppe) massiv falsche Näherungstreffer — die Welt-AABB einer rotierten Box ist immer
+größer als die Box selbst und kann Punkte als „innerhalb" markieren, die es geometrisch
+nicht sind. Korrekt ist nur ein Test nach Transformation des Rays in den Objekt-
+Lokalraum (`inverse(matrixWorld)` anwenden, dann gegen die unrotierte lokale
+BoundingBox prüfen). Beispielcode dafür liegt im Zwischenverlauf dieser Session.
 
-**Reihenfolge-Hinweis:** H12 und M15 wurden bewusst **vor** H11 gezogen, weil jede
-Tuningwert-Änderung laut Auftrag den `simulate.ts`-Nachweis braucht. M12 (`at()`-Rundung)
-steht noch aus und muss **vor** M03 (Linien-Interpolation) kommen.
+## Nicht vergessen — zwei neue Aufgaben vom Nutzer (noch nicht bearbeitet)
 
-## Referenzmessung (nach H11, mit ertüchtigtem simulate.ts)
+1. **Sound-Bug Mobile:** Auf Tablets wird Ton ausgegeben, auf Smartphones im Browser
+   nicht. Noch nicht untersucht — vermutlich Autoplay-/Gesture-Policy-Unterschied
+   zwischen Tablet- und Phone-Browsern (`audio.ts` `start()`/`ctx.resume()`).
+2. **Feature-Wunsch:** Die komplette Flotte (alle 7 Autos) soll sichtbar rechts neben
+   der Auffahrt (der Rampe/dem Hof der Ausfahrt-Choreografie) stehen — vermutlich als
+   statische Deko-Instanzen in `buildHomeBase()`/`world.ts`, ähnlich den Häusern/Bäumen
+   als `InstancedMesh` oder einzelne `CarMesh`-Instanzen ohne Physik.
 
-```
-=== 0–100 km/h (Vollgas, längste Gerade) ===
-MINI Cooper S              sim  5.86 s  Angabe  6.8 s  Δ -0.94 s
-Toyota GR Yaris            sim  3.73 s  Angabe  5.2 s  Δ -1.47 s   <- Befund M04
-Toyota GR Supra            sim  4.84 s  Angabe  4.3 s  Δ +0.54 s
-Porsche Taycan Turbo GT    sim  2.58 s  Angabe  2.3 s  Δ +0.28 s
-Porsche 718 Spyder RS      sim  3.72 s  Angabe  3.4 s  Δ +0.32 s
-Porsche 911 GT3 RS (992)   sim  3.13 s  Angabe  3.2 s  Δ -0.07 s
-Ferrari 296 GTB            sim  3.17 s  Angabe  2.9 s  Δ +0.27 s
+## Frühere Merges (Kontext für die Historie)
 
-=== Lap-Times ===
-MINI Cooper S            11:30.717   GR Yaris        11:23.292
-GR Supra                 11:49.117   Taycan Turbo GT 11:23.242
-718 Spyder RS            12:03.100   911 GT3 RS      13:22.092
-Ferrari 296 GTB          11:57.650
-```
-
-Diese Zahlen sind die Vergleichsbasis für M04 und M05 — nach jeder Tuningwert-Änderung
-neu messen und gegen diese Tabelle halten (Balancing darf nicht kippen).
-
-Messlauf reproduzieren:
-
-```bash
-npx vite build --ssr scripts/simulate.ts --outDir scripts/dist && node scripts/dist/simulate.js
-```
-
-## Als Nächstes: neues Feature „Herr Müller" (vom Nutzer priorisiert)
-
-Die Review-Abarbeitung ist auf Wunsch **pausiert**. Vorrang hat ein Feature-Paket:
-
-1. **Herr Müller in der Garage aktiver und prominenter** — pro Fahrzeugmodell eigene
-   Sprüche, mehr Mimik und Gestik, und er verabschiedet jeden Fahrer.
-2. **Skriptierte Ausfahrt:** Die ersten Meter fährt das Auto automatisch — aus der
-   Garage heraus, direkt links, eine Auffahrt hoch, rechts ein U-Turn, dann links in
-   die Abzweigung Richtung Streckeneingang. Müller verabschiedet dabei modellbezogen.
-3. **Mobile-Bug:** In der Mobilansicht der Garage verdecken Nameplate, Datenleiste und
-   Müller-Sprechblase das Auto (bestätigt per Screenshot bei 375×812).
-
-### Recherche-Ergebnisse zur Ausfahrt (damit das nicht erneut erarbeitet werden muss)
-
-Die Basis steht in `world.ts` → `buildHomeBase()`, verankert an `approach.at(0)`:
-
-```
-group.position = approach.at(0).pos + normal*(halfWidth+9) + tangent*(-4), y -= DIP(1.9)
-group.rotation.y = atan2(tangent.x, tangent.z) = 37.92°
-=> Weltposition (-728.03, 278.10, 2324.41)
-```
-
-Im lokalen Frame der Basis gilt: **+z = Straßenrichtung, +x = links/von der Straße weg**,
-lokal y=0.15 ist der Hofboden, y=1.9 das Straßenniveau. Die Straßenmittellinie liegt bei
-lokal x ≈ −12.1. Gemessene Lage der Anfahrtspunkte im lokalen Frame:
-
-| idx | s (m) | lokal x | lokal z |
-|----|------|---------|---------|
-| 0 | 0 | −12.10 | 4.00 |
-| 1 | 6 | −12.10 | 9.56 |
-| 2 | 12 | −12.19 | 15.08 |
-| 3 | 18 | −12.72 | 20.47 |
-| 4 | 24 | −14.24 | 25.58 |
-| 5 | 30 | −16.95 | 30.28 |
-| 6 | 36 | −20.70 | 34.48 |
-
-**Wichtig:** Die Straße läuft nur bis etwa lokal z≈21 gerade (x≈−12,1…−12,7) und biegt
-danach nach −x weg. Die Abzweigung muss deshalb bei **lokal z ≈ 18–21** liegen, nicht
-weiter hinten.
-
-**Zweite Randbedingung:** Die Gras-Ribbons der Anfahrt reichen nur bis 40 m seitlich
-(`edge(i, ±1, 40, -3)`), und das Gelände fällt dabei um 3 m ab. Alles jenseits von
-lokal x ≈ 26 steht über dem Nichts. Der U-Turn muss also innerhalb x ≤ 26 bleiben —
-mit Rampenkopf bei x≈19 und Radius 5 geht das gerade auf (Scheitel bei x=24).
-
-**Vorgesehene Choreografie (lokale Wegpunkte, noch nicht umgesetzt):**
-Tor (1.4, 5.55) → +z bis z≈10 → Linksbogen → +x → Rampe x 11→19 (Anstieg 0,15→1,9,
-12,3°) → 180°-Rechtsbogen r=5 um Mittelpunkt (19, 16.5) → Ausfahrt (19, 21.5) mit
-Kurs −x → Verbindungsspur bis x≈−6 → Linksbogen in die Straße, Übergabe an den
-Spieler bei etwa Anfahrtsindex 3–4, lateral ≈ −1,2 (rechte Fahrspur).
-
-**Zwei Umbauten sind dafür nötig:**
-- `buildHomeBase()`: Die Halle ist aktuell ein **massiver** Quader (`Box(16,6,11)`), das
-  Auto könnte gar nicht darin stehen. Sie muss zu Wänden + Dach + offenem Tor werden,
-  und Hof/Rampe/Plateau/Verbindungsspur müssen zur Choreografie passen (Plateau als
-  dicker Quader, damit es am abfallenden Hang nicht schwebt).
-- `Game.ts`: neue Phase `'departure'` **vor** `'approach'`. Kinematisch animieren, nicht
-  über die Physik — `Vehicle.step()` zwängt das Auto per Barriere 6,5 m neben die
-  Straßenmitte, und der Hof liegt 12–24 m daneben. Countdown (3,2 s) läuft im Stand in
-  der Halle, danach die Fahrt, dann Übergabe. Eigene Departure-Kamera nötig, sonst
-  klippt die Chase-Kamera durch die Hallenrückwand.
-
-## Danach: restliche REVIEW.md-Befunde
-
-Reihenfolge wie vereinbart: M01, M02, **M12 vor M03**, M04, M05 (beide gegen die
-Referenzmessung oben), M06–M14, M16–M18, dann N01–N27. Zum Schluss `CHANGELOG.md`
-mit erledigt / bewusst nicht erledigt (+ Grund).
-
-Offene Nebenbefunde stehen in [OFFEN.md](OFFEN.md) — insbesondere **O1**, das M17 blockiert.
+- PR #1: Review-Fixes dieser Session (H1–H13) gemergt mit einer parallelen Session, die
+  dieselben Befunde unabhängig umgesetzt hatte (Merge-Commit `60fc97b`).
+- PR #2 (extern gemergt, `378f505`): eine weitere parallele Session hat den kompletten
+  restlichen M/N-Review-Backlog erledigt (Physik-Tuning M04/M05/N11-14, Rendering-
+  Disposal H5/M08/M09, Audio M07/M14/N25, UI M02/M13/N03/N06/N09/N10/N19/N23/N24,
+  Track M10/M12/N15/N16, Web M16/M18/N27, Tools H12/M15/N17/N18/M06). `REVIEW.md` ist
+  damit inhaltlich vollständig abgearbeitet — nur `CHANGELOG.md` (erledigt / bewusst
+  nicht erledigt) steht laut ursprünglichem Auftrag noch aus.
+- PR #3 (dieser Durchlauf): die oben beschriebenen Grafikfehler.
 
 ## Prüfschritte
 
-- `npx tsc --noEmit` — meldet als einzigen Fehler O1 (vorbestehend, siehe OFFEN.md).
-- Dev-Server: `npm run dev` läuft auf Port 5180. Im Worktree lief er auf 5181
-  (`npx vite --port 5181 --strictPort`), weil 5180 vom Haupt-Checkout belegt war.
+- `npx tsc --noEmit` — komplett grün (kein offener Fehler mehr, O1 aus OFFEN.md ist
+  durch `@types/node` in der parallelen Session behoben).
+- `GITHUB_PAGES=true npm run build` — grün.
+- Dev-Server im Worktree: `npx vite --port 5181 --strictPort` (Port 5180 ist vom
+  Haupt-Checkout belegt). Nach `npm install` im Worktree ggf. den Server neu starten —
+  Vites Dependency-Re-Optimierung nach Lockfile-Änderungen kann den laufenden Prozess in
+  einen kaputten Zustand bringen (beobachtet: ERR_CONNECTION_RESET-Fehlerkaskade in der
+  Konsole, HMR liefert dann falsche/leere Frames).
