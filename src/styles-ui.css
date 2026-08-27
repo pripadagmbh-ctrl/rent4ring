@@ -1058,7 +1058,10 @@
   transition: fill 0.08s;
 }
 
-.ps-pad:active .ps-pad__ring {
+/* Pressed state comes from the strip's hit-testing, not :active — the pads
+   no longer receive the pointer events themselves, and a press inside the
+   tolerance ring should light the pad up just the same. */
+.ps-pad--down .ps-pad__ring {
   fill: rgba(46, 58, 74, 0.85);
   stroke: rgba(255, 255, 255, 0.55);
 }
