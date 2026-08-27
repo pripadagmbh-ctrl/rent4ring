@@ -2246,7 +2246,31 @@
 
 .banscene--kick .banscene__mueller {
   left: 33%;
-  transform: rotate(-8deg);
+  /* He has to visibly do it. A static figure with the customer sliding away
+     beside him read as no kick at all — the eye needs the wind-up and the
+     follow-through to join the two events up. */
+  animation: banscene-kick 1.2s cubic-bezier(0.3, 0, 0.2, 1);
+  transform-origin: 50% 90%;
+}
+
+@keyframes banscene-kick {
+  0% {
+    transform: rotate(0deg) translateX(0);
+  }
+  22% {
+    /* Wind-up: weight back. */
+    transform: rotate(-15deg) translateX(-10px);
+  }
+  42% {
+    /* Through it. */
+    transform: rotate(20deg) translateX(16px);
+  }
+  62% {
+    transform: rotate(7deg) translateX(7px);
+  }
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
 }
 
 .banscene--inside .banscene__mueller {
@@ -2286,7 +2310,13 @@
   bottom: 66%;
   transform: rotate(430deg) scale(0.4);
   opacity: 0;
-  transition: all 2.2s cubic-bezier(0.2, -0.4, 0.6, 1);
+  /* Delayed to the moment his leg comes through, and the fade held back to
+     the very end so you can follow him most of the way. */
+  transition:
+    left 2.4s cubic-bezier(0.2, -0.4, 0.6, 1) 0.34s,
+    bottom 2.4s cubic-bezier(0.2, -0.4, 0.6, 1) 0.34s,
+    transform 2.4s cubic-bezier(0.2, -0.4, 0.6, 1) 0.34s,
+    opacity 0.7s linear 2.1s;
 }
 
 /* The streak he leaves. Only on the kick beat, and it fades as it stretches. */
@@ -2303,7 +2333,7 @@
 }
 
 .banscene--kick .banscene__swoosh {
-  animation: banscene-swoosh 0.9s ease-out forwards;
+  animation: banscene-swoosh 0.9s ease-out 0.34s forwards;
 }
 
 @keyframes banscene-swoosh {
