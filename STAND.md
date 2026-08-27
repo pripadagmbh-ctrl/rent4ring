@@ -1,81 +1,96 @@
 # STAND.md — Arbeitsstand
 
-Stand: 26.08.2026, Branch `claude/rent4ring-review-0377f5`. Alle 13 „hoch"-Befunde aus
-REVIEW.md **und** der komplette restliche M/N-Backlog sind erledigt (der M/N-Teil kam
-über einen parallelen Session-Strang, per PR #2 gemergt). Live auf GitHub Pages:
-<https://pripadagmbh-ctrl.github.io/rent4ring/>
+Stand: 27.08.2026, Branch `claude/rent4ring-review-0377f5`. Der Review-Backlog aus
+REVIEW.md ist vollständig abgearbeitet; seitdem läuft Feature-Arbeit auf Zuruf. Live
+auf GitHub Pages: <https://pripadagmbh-ctrl.github.io/rent4ring/>
 
-## Was gerade lief: Grafikfehler-Rundfahrt (PR #3, gemergt)
+Die Chronologie der Änderungen steht in [CHANGELOG.md](CHANGELOG.md), bewusst nicht
+umgesetzte Nebenbefunde in [OFFEN.md](OFFEN.md). Dieses Dokument hält nur fest, was
+gerade gilt und was man beim Weiterarbeiten wissen muss.
 
-Nutzer meldete Grafikfehler „am Anfang der Garage, vor der Rennstrecke und auf der
-Rennstrecke" plus durchsichtige/nicht modelltreue Fahrzeuge. Komplette Erkundungsfahrt
-gemacht, jeweils per pausiertem echten Spielzustand (`game.paused=true` +
-`composer.render()` + Pixel-Sampling des WebGL-Canvas) verifiziert, nicht nur per
-Sichtprüfung — Screenshots direkt nach `click("Drive now")` sind unzuverlässig (zeigen
-teils einen stehengebliebenen/leeren Frame, kein echter Bug).
+## Zuletzt gemergt (PR #23 und #24, beide live)
 
-**Gefunden und behoben:**
-1. **Hallenbeleuchtung überbelichtet** — Punktlicht in `buildHomeBase()` (world.ts) mit
-   Intensität 42 blies zusammen mit dem Bloom-Pass (Threshold 0,86–0,9) das komplette
-   Halleninnere zu einer strukturlosen hellen Fläche aus. Auf 8 reduziert.
-2. **Ausfahrt-Kamera-Komposition** — der feste Establishing-Shot-Anchor in
-   `departure.ts` stand zu nah/zu direkt vor der 5,2 m breiten Tordurchfahrt, sodass die
-   Schuppenwand jede Einstellung dominierte (auch nach Behebung von Punkt 1 noch
-   sichtbar — zwei Fehlversuche dokumentiert im Kommentar über `CAMERA_ANCHOR`).
-   Jetziger Wert `(-9.0, 3.6, 13.5)`: echter 3/4-Shot von der linken, nie befahrenen
-   Hofseite, verifiziert über den gesamten aktiven Bereich u=0–0,40 (Rampe + U-Turn).
-3. **Kamerawechsel zu früh** — Wechsel auf fahrzeugrelative Chase-Kamera lag bei u=0,17,
-   mitten in der engen Rampen-/Kehren-Passage nahe an Stützmauern. Auf u=0,42 angehoben
-   (= `departureSpeedAt`'s Rampe/Verbindungsspur-Grenze).
-4. **Anfahrtsstraße:** Fahrbahn-/Bankett-/Wiesen-Ribbons liefen einseitig (Himmel durch
-   die Fahrbahn an Hängen sichtbar) → `side: THREE.DoubleSide`. Dorfhäuser hatten festen
-   Randabstand unabhängig von der eigenen Breite → skaliert jetzt mit Hausbreite. Hecken
-   22 m lang → schnitten in Kurven über den Asphalt → auf 10 m gekürzt. Die Wiese der
-   ersten 50 m überschnitt Hof/Rampe/Verbindungsspur der Ausfahrt → dort zurückgenommen.
-5. **Leitplanken:** Pfosten nur 1,0 m lang und nur an jedem zweiten Segment → schwebten
-   auf abfallendem Gelände sichtbar über dem Boden. Jetzt 1,9 m, unter Flur einbetoniert,
-   an jedem Segment.
-6. **Fahrzeug-Transparenz/-Modelltreue:** war bereits in einem vorherigen Commit
-   (`876010a`) behoben (opakes statt durchsichtiges Glas) — hier nur verifiziert
-   (GT3 RS, 296 GTB, GR Supra in der Garage geprüft, alle unauffällig).
+Streckenguide in der Garage, das Areal um 1,7° eingedreht, Wendehammer und
+Verbindungsfahrbahn aus der Fahrbahn geschnitten, rote Couch im Showroom, Dale
+animiert und neben Herrn Müller im HUD, Reifenquietschen nach Belastung,
+Crash-Geräusche in drei Schichten plus Schleifen an der Leitplanke, CHANGELOG.md
+angelegt.
 
-**Wichtige Lektion für künftige Grafik-Debugging-Sessions in diesem Projekt:** Ein
-naiver Ray-gegen-Welt-AABB-Test liefert bei rotierten Boxen (z. B. die um ~38° gedrehte
-Hofgruppe) massiv falsche Näherungstreffer — die Welt-AABB einer rotierten Box ist immer
-größer als die Box selbst und kann Punkte als „innerhalb" markieren, die es geometrisch
-nicht sind. Korrekt ist nur ein Test nach Transformation des Rays in den Objekt-
-Lokalraum (`inverse(matrixWorld)` anwenden, dann gegen die unrotierte lokale
-BoundingBox prüfen). Beispielcode dafür liegt im Zwischenverlauf dieser Session.
+## Offen entschieden, nicht offen vergessen
 
-## Nicht vergessen — zwei neue Aufgaben vom Nutzer (noch nicht bearbeitet)
+- **Zielrundenzeiten bleiben unverändert** (OFFEN.md O5). Der Auto-Fahrer aus
+  `simulate.ts` verbringt 20 bis 53 Prozent der Runde neben der Strecke und
+  rammt 111 bis 348 Mal die Leitplanke; seine Zeiten sind zu schnell, weil er
+  abkürzt, nicht weil die Ziele zu weich wären. Solange das so ist, gibt es
+  keinen belastbaren Maßstab für den Schwierigkeitsgrad.
+- **Gesprochene Zeilen liegen auf Eis.** Der Commit mit den Browser-Stimmen
+  (`speechSynthesis`, deutsche Stimme für Herrn Müller, britische für Dale) ist
+  fertig, aber nicht hochgeladen: der Nutzer fand die verfügbaren Stimmen zu
+  künstlich. Ursache ist die Engine — auf dem Testrechner stellt Chrome nur
+  sechs alte Microsoft-SAPI-Stimmen bereit, keine neuronalen. Ein Aufnahmeskript
+  mit allen 184 Zeilen in 29 Aufnahmen existiert für den Fall, dass echte
+  Aufnahmen kommen.
 
-1. **Sound-Bug Mobile:** Auf Tablets wird Ton ausgegeben, auf Smartphones im Browser
-   nicht. Noch nicht untersucht — vermutlich Autoplay-/Gesture-Policy-Unterschied
-   zwischen Tablet- und Phone-Browsern (`audio.ts` `start()`/`ctx.resume()`).
-2. **Feature-Wunsch:** Die komplette Flotte (alle 7 Autos) soll sichtbar rechts neben
-   der Auffahrt (der Rampe/dem Hof der Ausfahrt-Choreografie) stehen — vermutlich als
-   statische Deko-Instanzen in `buildHomeBase()`/`world.ts`, ähnlich den Häusern/Bäumen
-   als `InstancedMesh` oder einzelne `CarMesh`-Instanzen ohne Physik.
+## Wichtige Lektion für Grafik-Debugging in diesem Projekt
 
-## Frühere Merges (Kontext für die Historie)
+Ein naiver Ray-gegen-Welt-AABB-Test liefert bei rotierten Boxen (die Hofgruppe
+steht um ~38° gedreht, seit dem Eindrehen um weitere 1,7°) massiv falsche
+Näherungstreffer — die Welt-AABB einer rotierten Box ist immer größer als die Box
+selbst und markiert Punkte als „innerhalb", die es geometrisch nicht sind. Korrekt
+ist nur ein Test nach Transformation des Rays in den Objekt-Lokalraum
+(`inverse(matrixWorld)` anwenden, dann gegen die unrotierte lokale BoundingBox
+prüfen).
 
-- PR #1: Review-Fixes dieser Session (H1–H13) gemergt mit einer parallelen Session, die
-  dieselben Befunde unabhängig umgesetzt hatte (Merge-Commit `60fc97b`).
-- PR #2 (extern gemergt, `378f505`): eine weitere parallele Session hat den kompletten
-  restlichen M/N-Review-Backlog erledigt (Physik-Tuning M04/M05/N11-14, Rendering-
-  Disposal H5/M08/M09, Audio M07/M14/N25, UI M02/M13/N03/N06/N09/N10/N19/N23/N24,
-  Track M10/M12/N15/N16, Web M16/M18/N27, Tools H12/M15/N17/N18/M06). `REVIEW.md` ist
-  damit inhaltlich vollständig abgearbeitet — nur `CHANGELOG.md` (erledigt / bewusst
-  nicht erledigt) steht laut ursprünglichem Auftrag noch aus.
-- PR #3 (dieser Durchlauf): die oben beschriebenen Grafikfehler.
+Zweite Lektion, aus derselben Ecke: Screenshots direkt nach `click("Drive now")`
+sind unzuverlässig — sie zeigen teils einen stehengebliebenen oder leeren Frame.
+Verifiziert wird über den pausierten echten Spielzustand (`game.paused = true`,
+`composer.render()`, Pixel-Sampling des WebGL-Canvas), nicht per Sichtprüfung.
+
+## Geometrie des Hofs — was aneinanderhängt
+
+Alles am Rent4Ring-Areal hängt an `homeBaseFrame()` in `departure.ts`: Halle, Hof,
+Rampe, Wendehammer, Flotten-Stellplätze, Publikum, Kamera und die Ausfahrtsroute.
+Wer dort etwas dreht oder verschiebt, verschiebt alles mit — das ist Absicht. Zwei
+Fallen dabei:
+
+1. Die Drehung (`TWIST`) geht um die **Einmündung**, nicht um den Hallenursprung.
+   Um den Ursprung gedreht reißt das ferne Ende der Verbindungsfahrbahn von der
+   Straße ab, die es treffen soll.
+2. `TWIST_PIVOT` ist bewusst ausgeschrieben und nicht aus `LINK` abgeleitet. Als
+   Mittelwert der Rechteckkanten wäre es beim nächsten Neuzuschnitt der Fahrbahn
+   mitgewandert und hätte still das ganze Areal verschoben.
+
+Das Grundstück liegt in einer Haarnadel: die Burgstraße läuft an der Halle vorbei
+hinaus und quert oben wieder nach Osten. Deren Kante liegt lokal bei etwa
+`z = 26,6 − 0,103·x`. Wer dort Flächen anlegt, prüft gegen diese Linie.
 
 ## Prüfschritte
 
-- `npx tsc --noEmit` — komplett grün (kein offener Fehler mehr, O1 aus OFFEN.md ist
-  durch `@types/node` in der parallelen Session behoben).
-- `GITHUB_PAGES=true npm run build` — grün.
-- Dev-Server im Worktree: `npx vite --port 5181 --strictPort` (Port 5180 ist vom
-  Haupt-Checkout belegt). Nach `npm install` im Worktree ggf. den Server neu starten —
-  Vites Dependency-Re-Optimierung nach Lockfile-Änderungen kann den laufenden Prozess in
-  einen kaputten Zustand bringen (beobachtet: ERR_CONNECTION_RESET-Fehlerkaskade in der
-  Konsole, HMR liefert dann falsche/leere Frames).
+- `npx tsc --noEmit` — grün.
+- `npx vite build` — grün. Warnt über die Bundle-Größe (1,06 MB, 308 kB gzip);
+  bekannt, nicht behoben.
+- Fahrzeug-Simulation: `npx vite build --ssr scripts/simulate.ts --outDir scripts/dist`,
+  dann `node scripts/dist/simulate.js`. Pflicht vor und nach jeder Änderung an
+  Tuning-Werten, mit Vorher/Nachher-Zahlen im Commit.
+- Dev-Server im Worktree über die Browser-Vorschau (`.claude/launch.json`, Port 5180
+  mit `autoPort`). Nach `npm install` im Worktree den Server neu starten — Vites
+  Dependency-Re-Optimierung nach Lockfile-Änderungen kann den laufenden Prozess in
+  einen kaputten Zustand bringen (beobachtet: ERR_CONNECTION_RESET-Kaskade, HMR
+  liefert danach falsche oder leere Frames).
+- Die Vorschau kompositiert keine Frames, solange das Panel nicht sichtbar ist:
+  keine Screenshots, kein `requestAnimationFrame`, keine Scroll-Events. Für
+  Verifikation stattdessen den Spielzustand direkt steppen (`game.running = false`,
+  dann `game.updateDeparture(dt)` in einer Schleife) und Werte auslesen.
+
+## Frühere Merges (Kontext für die Historie)
+
+- PR #1: Review-Fixes (H1–H13), gemergt mit einer parallelen Session, die dieselben
+  Befunde unabhängig umgesetzt hatte (Merge-Commit `60fc97b`).
+- PR #2 (extern gemergt, `378f505`): der komplette restliche M/N-Review-Backlog aus
+  einer weiteren parallelen Session. `REVIEW.md` ist damit inhaltlich vollständig
+  abgearbeitet.
+- PR #3: Grafikfehler-Rundfahrt (Hallenbeleuchtung, Ausfahrtkamera, Ribbon-
+  Rückseiten, Leitplankenpfosten, Wiesenüberschneidung).
+- PR #20–#22: Ducati, Hofszene nach der schwarzen Flagge, Statisten, Dale als
+  Instructor, Blitzer, Drift-Fix.
+- PR #23, #24: siehe oben.

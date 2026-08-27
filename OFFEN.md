@@ -5,7 +5,7 @@ aber **nicht** in REVIEW.md stehen. Laut Auftrag hier notiert statt umgesetzt.
 
 ---
 
-## O1 — `npx tsc --noEmit` schlägt schon im Ausgangszustand fehl
+## O1 — `npx tsc --noEmit` schlug im Ausgangszustand fehl (behoben)
 
 ```
 vite.config.ts(10,9): error TS2591: Cannot find name 'process'.
@@ -24,25 +24,22 @@ neue Abhängigkeit (`@types/node`) — laut Auftrag vorher abzustimmen.
 solange dieser Fehler steht, würde das den Build sofort rot machen. O1 muss also
 vor oder zusammen mit M17 geklärt werden.
 
-**Optionen:** (a) `@types/node` als devDependency + `"types": ["node"]` in tsconfig,
-(b) `import.meta.env` statt `process.env` verwenden (Vite-idiomatisch, keine neue
-Abhängigkeit), (c) `vite.config.ts` aus dem Typecheck ausschließen.
-Empfehlung: (b) — passt zum bereits genutzten `import.meta.env.DEV`.
+**Behoben** über Variante (a): `@types/node` steht als devDependency in
+`package.json`, `npx tsc --noEmit` läuft grün, und M17 (`tsc --noEmit` vor
+`vite build`) ist damit freigegeben und umgesetzt.
 
 ---
 
-## O2 — `package-lock.json` trägt einen veralteten Projektnamen
+## O2 — `package-lock.json` trug einen veralteten Projektnamen (behoben)
 
 Das Lockfile nennt das Projekt an zwei Stellen `rent4ring`, `package.json` dagegen
 `rent4ring-home-circuit`; zusätzlich steht im Lockfile ein `"license": "ISC"`, das
 `package.json` nicht führt. Ein `npm install` korrigiert beides automatisch und
 erzeugt dadurch einen Diff, der mit keiner inhaltlichen Änderung zu tun hat.
 
-**Warum nicht umgesetzt:** Kein Befund in REVIEW.md; die Änderung wurde bewusst
-verworfen, damit kein sachfremder Diff in den Befund-Commits landet.
-
-**Relevanz:** Kosmetisch. Fällt aber bei jedem frischen `npm install` wieder an und
-verschmutzt dann den Arbeitsbaum.
+**Behoben:** Das Lockfile nennt das Projekt an beiden Stellen
+`rent4ring-home-circuit`, die fremde `"license": "ISC"`-Zeile ist weg. Nachgezogen
+in `da44de6`.
 
 ---
 
