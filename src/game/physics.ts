@@ -52,7 +52,12 @@ export interface VehicleTelemetry {
   speedKmh: number;
   rpm: number;
   gear: number;
-  /** 0–1, how much of the available tyre grip is being used. */
+  /**
+   * How much of the available tyre grip is being used: 1 is the limit, and it
+   * carries on up to 1.4 while the car is sliding past it. Not 0–1 — the tyre
+   * audio reads the part above 1 to tell a car on the edge from one that has
+   * gone, so clamping it here would silence that.
+   */
   gripUsage: number;
   lateralG: number;
   longitudinalG: number;

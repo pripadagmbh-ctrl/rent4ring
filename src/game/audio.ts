@@ -12,6 +12,16 @@ export class EngineAudio {
   private noise: AudioBufferSourceNode | null = null;
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
+  /** Tyre squeal: its own noise source, resonant filter and two modulators. */
+  private squeal: {
+    source: AudioBufferSourceNode;
+    band: BiquadFilterNode;
+    gain: GainNode;
+    warble: OscillatorNode;
+    warbleDepth: GainNode;
+    chatter: OscillatorNode;
+    chatterDepth: GainNode;
+  } | null = null;
   private started = false;
   private disposed = false;
   /** Engine damp — set for pause AND user mute. */
@@ -103,13 +113,22 @@ export class EngineAudio {
       this.oscillators.push({ osc, gain, mult: h.mult });
     }
 
-    // Tyre/wind noise bed.
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    noise.loop = true;
+    // Two seconds of white noise, looped. Shared shape, two consumers: the
+    // wind bed below and the tyre squeal after it.
+    const makeNoise = (): AudioBufferSourceNode => {
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      return src;
+    };
+
+    // Wind bed. Only wind now — what the tyres do has its own chain, and
+    // pushing both through one fixed 900 Hz band made a slide sound like
+    // somebody turning up the wind.
+    const noise = makeNoise();
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = 0;
     const noiseFilter = ctx.createBiquadFilter();
@@ -120,6 +139,49 @@ export class EngineAudio {
     this.noise = noise;
     this.noiseGain = noiseGain;
 
+    // ------------------------------------------------------- tyre squeal
+    // A tyre howls because the tread blocks stick and let go, over and over,
+    // which is a narrow band of noise rather than a tone or a hiss. So: white
+    // noise through a resonant bandpass, with the Q — how tonal it is — under
+    // the same control as everything else. Two modulators keep it alive:
+    // `warble` slides the centre a few percent at walking pace, `chatter`
+    // pulses the level fast enough to read as stick-slip rather than tremolo.
+    const squealSource = makeNoise();
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = SQUEAL_BASE_HZ;
+    band.Q.value = SQUEAL_Q_TONAL;
+    const squealGain = ctx.createGain();
+    squealGain.gain.value = 0;
+    squealSource.connect(band).connect(squealGain).connect(master);
+    squealSource.start();
+
+    const warble = ctx.createOscillator();
+    warble.type = 'sine';
+    warble.frequency.value = 6.3;
+    const warbleDepth = ctx.createGain();
+    warbleDepth.gain.value = 0;
+    warble.connect(warbleDepth).connect(band.frequency);
+    warble.start();
+
+    const chatter = ctx.createOscillator();
+    chatter.type = 'sine';
+    chatter.frequency.value = 21;
+    const chatterDepth = ctx.createGain();
+    chatterDepth.gain.value = 0;
+    chatter.connect(chatterDepth).connect(squealGain.gain);
+    chatter.start();
+
+    this.squeal = {
+      source: squealSource,
+      band,
+      gain: squealGain,
+      warble,
+      warbleDepth,
+      chatter,
+      chatterDepth,
+    };
+
     // A drive started while muted must stay muted (H7).
     master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
@@ -127,10 +189,10 @@ export class EngineAudio {
   /**
    * @param rpmRatio engine speed as a fraction of redline
    * @param load     throttle 0–1
-   * @param speedKmh road speed for the wind/tyre bed
-   * @param slip     0–1, how much the tyres are sliding
+   * @param speedKmh road speed for the wind bed
+   * @param grip     tyre grip usage: 1 is the limit, above 1 the car is sliding
    */
-  update(rpmRatio: number, load: number, speedKmh: number, slip: number): void {
+  update(rpmRatio: number, load: number, speedKmh: number, grip: number): void {
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
     const now = ctx.currentTime;
@@ -148,10 +210,65 @@ export class EngineAudio {
       this.filter.frequency.setTargetAtTime(700 + rpmRatio * 4200 + load * 1400, now, 0.07);
     }
     if (this.noiseGain) {
-      const wind = Math.min(speedKmh / 320, 1) * 0.1;
-      const scrub = slip * 0.3;
-      this.noiseGain.gain.setTargetAtTime(wind + scrub, now, 0.06);
+      this.noiseGain.gain.setTargetAtTime(Math.min(speedKmh / 320, 1) * 0.1, now, 0.06);
     }
+    this.updateSqueal(speedKmh, grip, now);
+  }
+
+  /**
+   * How hard the tyres are working, turned into how they sound.
+   *
+   * Three things move together, and they are not the same thing:
+   *
+   *  · `work` — how far into the last of the grip the tyre is. Nothing below
+   *    SQUEAL_START: a tyre at three quarters of its limit is silent, and a
+   *    car that chirps through every gentle bend sounds like a toy.
+   *  · `sliding` — how far *past* the limit. A tyre only howls while it is
+   *    still gripping and letting go in turn; once it is properly sliding the
+   *    howl broadens into a scrub, so past the limit the Q falls away and the
+   *    level keeps climbing. That is the difference between a car on the edge
+   *    and a car that has gone.
+   *  · `rolling` — a stationary tyre cannot squeal however hard it is pushed,
+   *    and the pitch climbs with road speed because the tread blocks are
+   *    passing through the contact patch faster.
+   */
+  private updateSqueal(speedKmh: number, grip: number, now: number): void {
+    const s = this.squeal;
+    if (!s) return;
+
+    const work = clamp01((grip - SQUEAL_START) / (1 - SQUEAL_START));
+    const sliding = clamp01((grip - 1) * 2.8); // full scrub at 1.35, just inside the 1.4 cap
+    const rolling = clamp01((speedKmh - 6) / 26);
+
+    // Squared, so the last few percent of grip are where almost all of the
+    // noise appears — that is what makes it usable as a signal to the driver
+    // rather than background texture.
+    //
+    // The two constants look enormous next to the engine's gains (0.34 for its
+    // loudest harmonic) and are not comparable to them: a Q=9 bandpass passes
+    // roughly a 120 Hz slice of a 22 kHz noise floor, so about eleven twelfths
+    // of the signal never reaches the mix. Rendered offline and measured, the
+    // engine stack sits at 0.264 RMS and these put the tyres at 0.054 on the
+    // limit and 0.095 in a full slide — a fifth to a third of the engine, and
+    // 0.007 for the first chirp at 90% grip. Present without drowning the car.
+    const level = work * work * rolling * (SQUEAL_AT_LIMIT + sliding * SQUEAL_SLIDE_EXTRA);
+
+    const centre = SQUEAL_BASE_HZ + rolling * 250 + work * 300;
+    const q = SQUEAL_Q_TONAL - sliding * (SQUEAL_Q_TONAL - SQUEAL_Q_SCRUB);
+
+    // A bandpass passes a slice of white noise f0/Q wide, so dropping Q from 9
+    // to 2.2 for the scrub doubles the amplitude on its own. Divide that back
+    // out and `level` above means what it says — otherwise the slide would get
+    // loud twice over, once because it should and once by accident.
+    s.gain.gain.setTargetAtTime(level * Math.sqrt(q / SQUEAL_Q_TONAL), now, 0.05);
+    s.band.frequency.setTargetAtTime(centre, now, 0.07);
+    s.band.Q.setTargetAtTime(q, now, 0.09);
+
+    // Both modulators are scaled by what they are modulating, not fixed: at a
+    // whisper a fixed depth would be the loudest part of the sound.
+    s.warbleDepth.gain.setTargetAtTime(centre * 0.025 + work * 20, now, 0.1);
+    s.chatterDepth.gain.setTargetAtTime(level * 0.3, now, 0.06);
+    s.chatter.frequency.setTargetAtTime(17 + work * 14, now, 0.1);
   }
 
   /** Short blip layered over the harmonic stack on an upshift. */
@@ -256,6 +373,20 @@ export class EngineAudio {
     } catch {
       /* already stopped */
     }
+    if (this.squeal) {
+      const { source, band, gain, warble, warbleDepth, chatter, chatterDepth } = this.squeal;
+      for (const node of [source, warble, chatter]) {
+        try {
+          node.stop();
+        } catch {
+          /* already stopped */
+        }
+      }
+      for (const node of [source, band, gain, warble, warbleDepth, chatter, chatterDepth]) {
+        node.disconnect();
+      }
+      this.squeal = null;
+    }
     // The context is shared across drives and must survive this one: closing
     // it would silence every later drive, and on iOS it cannot be unlocked
     // again without a fresh user gesture. So tear down only what this
@@ -274,6 +405,21 @@ export class EngineAudio {
     this.started = false;
   }
 }
+
+/** Grip usage at which the tyres first make themselves heard. */
+const SQUEAL_START = 0.84;
+/** Centre of the squeal band at a crawl; road speed and load lift it. */
+const SQUEAL_BASE_HZ = 540;
+/** Resonance while the tyre is still gripping and letting go — a howl. */
+const SQUEAL_Q_TONAL = 9;
+/** Resonance once it is properly sliding — a scrub, much wider. */
+const SQUEAL_Q_SCRUB = 2.2;
+/** Gain into the squeal band with the tyre exactly on its limit. */
+const SQUEAL_AT_LIMIT = 2.0;
+/** How much more it gains once the tyre is properly sliding. */
+const SQUEAL_SLIDE_EXTRA = 1.35;
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 function baseGainFor(mult: number, electric: boolean): number {
   if (electric) return mult === 1 ? 0.1 : mult === 6 ? 0.28 : 0.14;

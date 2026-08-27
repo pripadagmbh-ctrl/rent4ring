@@ -21,23 +21,27 @@ interface Props {
  * a half from where the car actually stopped, and none of this needs to be
  * driveable. It only needs to be watched.
  */
+/**
+ * No captions. They described what you were already watching — the truck
+ * tipping, him going off, the customer leaving over the roofs — and reading a
+ * sentence about a thing is a poorer way of learning it than seeing it.
+ */
 type Beat = {
   /** Milliseconds from the start of the scene. */
   at: number;
-  caption: string;
   /** Drives the CSS stage class, one per movement. */
   stage: string;
 };
 
 const BEATS: Beat[] = [
-  { at: 0, stage: 'arrive', caption: 'The truck backs into the yard.' },
-  { at: 2000, stage: 'unload', caption: 'It tips the deck and puts what is left of it at his feet.' },
-  { at: 4200, stage: 'rage', caption: '"THAT WAS A CAR. THIS MORNING. IT WAS A CAR."' },
-  { at: 7000, stage: 'carry', caption: 'He picks the customer up. One hand. Barely looks.' },
-  { at: 9200, stage: 'wind', caption: 'The dog sits up. The dog knows this part.' },
-  { at: 10600, stage: 'kick', caption: 'And away you go, over the roofs, towards the castle.' },
-  { at: 13200, stage: 'treat', caption: '"Good boy. You saw nothing."' },
-  { at: 15400, stage: 'inside', caption: 'They go back in. There is paperwork.' },
+  { at: 0, stage: 'arrive' },
+  { at: 2000, stage: 'unload' },
+  { at: 4200, stage: 'rage' },
+  { at: 7000, stage: 'carry' },
+  { at: 9200, stage: 'wind' },
+  { at: 10600, stage: 'kick' },
+  { at: 13200, stage: 'treat' },
+  { at: 15400, stage: 'inside' },
 ];
 
 const TOTAL_MS = 17600;
@@ -114,10 +118,6 @@ export default function BanScene({ car, onDone }: Props) {
         <Barbet />
       </div>
       <div className="banscene__treat" aria-hidden="true" />
-
-      <p className="banscene__caption" aria-live="polite">
-        {current.caption}
-      </p>
 
       <button className="banscene__skip" onClick={onDone}>
         Skip

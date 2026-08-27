@@ -1210,8 +1210,11 @@ export class Game {
 
     const t = this.telemetry;
     if (t) {
-      const slip = THREE.MathUtils.clamp((t.gripUsage - 0.9) * 2.5, 0, 1);
-      this.audio.update(t.rpm / this.car.redlineRpm, this.input.state.throttle, t.speedKmh, slip);
+      // Grip usage goes across raw. The audio owns the question of what a tyre
+      // at 94% sounds like as against one at 108%, and squashing it to a 0–1
+      // "slip" here threw away the part above the limit that tells the two
+      // apart.
+      this.audio.update(t.rpm / this.car.redlineRpm, this.input.state.throttle, t.speedKmh, t.gripUsage);
     }
   }
 

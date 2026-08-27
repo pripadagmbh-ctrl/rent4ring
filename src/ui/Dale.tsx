@@ -3,6 +3,8 @@ interface Props {
   urgent?: boolean;
   /** He is apologising to Herr Müller, not talking to you. */
   sheepish?: boolean;
+  /** Works the jaw and nods the head, the way Herr Müller does on the floor. */
+  talking?: boolean;
   className?: string;
 }
 
@@ -15,8 +17,19 @@ interface Props {
  * paddock stickers, the glasses under it, the moustache, and the boom mic he
  * talks into whether or not it is switched on.
  */
-export default function Dale({ urgent = false, sheepish = false, className }: Props) {
-  const classes = ['dale', urgent && 'dale--urgent', sheepish && 'dale--sheepish', className]
+export default function Dale({
+  urgent = false,
+  sheepish = false,
+  talking = false,
+  className,
+}: Props) {
+  const classes = [
+    'dale',
+    urgent && 'dale--urgent',
+    sheepish && 'dale--sheepish',
+    talking && 'dale--talking',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -45,6 +58,10 @@ export default function Dale({ urgent = false, sheepish = false, className }: Pr
       {/* Neck. */}
       <path d="M66 128h28v26H66z" fill="#c99a76" />
 
+      {/* Everything from the jaw up rides in one group, so the nod turns the
+          head — lid, glasses, mic and all — rather than sliding the face out
+          from under the helmet. */}
+      <g className="dale__head">
       {/* Face. Sits low enough that the open lid above never reaches it —
           getting this wrong buried his eyes under the peak. */}
       <ellipse cx="80" cy="104" rx="30" ry="32" fill="url(#d-skin)" />
@@ -88,7 +105,7 @@ export default function Dale({ urgent = false, sheepish = false, className }: Pr
       <path d="M56 122c1 6 4 12 8 16l-5 5c-6-5-10-13-11-20z" fill="#22262c" />
       <ellipse cx="64" cy="145" rx="7" ry="5.5" fill="#33383f" />
       <ellipse cx="64" cy="145" rx="3.6" ry="2.8" fill="#12151a" />
-
+      </g>
     </svg>
   );
 }

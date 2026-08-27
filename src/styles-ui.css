@@ -2412,55 +2412,7 @@
   }
 }
 
-/* -------------------------------------------------------------- caption */
-/* The shed, over on the right, that they disappear into. */
-.banscene__shed {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 26%;
-  height: 46%;
-  background: linear-gradient(#e2e0da, #c3c1ba);
-  border-left: 2px solid #a8a69f;
-}
-
-.banscene__door {
-  position: absolute;
-  left: 22%;
-  bottom: 0;
-  width: 56%;
-  height: 74%;
-  background: repeating-linear-gradient(#4a4f55 0 6px, #3c4147 6px 12px);
-  border-radius: 3px 3px 0 0;
-}
-
-/* They walk towards it rather than dissolving on the spot. */
-.banscene--inside .banscene__mueller {
-  left: 62%;
-  opacity: 0;
-  transition: left 1.6s ease-in, opacity 1.6s ease-in 0.4s;
-}
-
-.banscene--inside .banscene__dog {
-  left: 58%;
-  opacity: 0;
-  transition: left 1.6s ease-in, opacity 1.6s ease-in 0.4s;
-}
-
-.banscene__caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  margin: 0;
-  text-align: center;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: #f2ece2;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
-  padding: 0 46px;
-}
-
+/* --------------------------------------------------------------- skip */
 .banscene__skip {
   position: absolute;
   top: 8px;
@@ -2480,10 +2432,6 @@
 @media (max-width: 620px) {
   .banscene {
     height: 240px;
-  }
-  .banscene__caption {
-    font-size: 11.5px;
-    padding: 0 12px;
   }
 }
 
@@ -2544,23 +2492,20 @@
 
 
 /* ============================================================ Dale's calls */
-/* Bottom centre: your eyes are already up the road, and the corners of the
-   screen are spoken for. It only exists while he is actually saying
-   something, so it never competes with the rest of the HUD for space. */
+/* In the left rail, directly under Herr Müller. Bottom-centre put the two of
+   them at opposite corners of the screen and you could not read both without
+   taking your eyes off the road. Being a flex child of the rail also means it
+   can never land on top of him, whatever length either of them runs to. */
 .dale-call {
-  position: absolute;
-  left: 50%;
-  bottom: calc(18px + var(--safe-bottom));
-  transform: translateX(-50%);
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  max-width: min(560px, calc(100vw - 220px));
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
   background: rgba(8, 11, 15, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-left: 3px solid var(--muted);
   border-radius: 13px;
-  padding: 9px 14px 9px 10px;
+  padding: 8px 11px 8px 8px;
   backdrop-filter: blur(10px);
   pointer-events: none;
   animation: dale-in 0.24s ease-out;
@@ -2569,7 +2514,7 @@
 @keyframes dale-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(8px);
+    transform: translateY(6px);
   }
 }
 
@@ -2593,9 +2538,8 @@
 }
 
 .dale-call__fig {
-  width: 46px;
+  width: 40px;
   flex: none;
-  align-self: center;
 }
 
 .dale-call__body {
@@ -2614,7 +2558,7 @@
 }
 
 .dale-call__text {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: #f2ece2;
   animation: dale-say 0.28s ease-out both;
@@ -2641,19 +2585,60 @@
   ry: 2;
 }
 
-@media (max-width: 760px), (max-height: 700px) {
+/* On the showroom floor he talks the way Herr Müller does — the jaw works and
+   the head nods, on their own rhythms so the two of them are never in step. */
+.dale--talking .dale__mouth {
+  transform-box: view-box;
+  transform-origin: 80px 133px;
+  animation: dale-talk 0.36s ease-in-out infinite;
+}
+
+@keyframes dale-talk {
+  0%,
+  100% {
+    transform: scaleY(0.65);
+  }
+  50% {
+    transform: scaleY(1.35);
+  }
+}
+
+.dale--talking .dale__head {
+  transform-box: view-box;
+  transform-origin: 80px 150px;
+  animation: dale-nod 3.7s ease-in-out infinite;
+}
+
+@keyframes dale-nod {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  28% {
+    transform: rotate(2.6deg);
+  }
+  61% {
+    transform: rotate(-1.8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dale--talking .dale__mouth,
+  .dale--talking .dale__head {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px), (max-height: 700px) {
   .dale-call {
-    max-width: calc(100vw - 40px);
-    padding: 7px 11px 7px 8px;
-    gap: 8px;
-    /* Clear of the thumb pads, which own the bottom corners. */
-    bottom: calc(104px + var(--safe-bottom));
+    padding: 6px 9px 6px 6px;
+    gap: 7px;
   }
   .dale-call__fig {
-    width: 36px;
+    width: 32px;
   }
   .dale-call__text {
-    font-size: 11.5px;
+    font-size: 11px;
   }
 }
 
@@ -2886,5 +2871,415 @@
   }
   .ticket__speech {
     flex-basis: 100%;
+  }
+}
+
+/* Each new line of Dale's fades in, same as Herr Müller's. */
+.showroom__dale-text {
+  display: block;
+  animation: mueller-say 0.34s ease-out both;
+}
+
+/* ============================================== garage pager + track guide */
+/* Two pages side by side. The scroller is native so a phone swipe, a trackpad
+   flick and shift-wheel all work without a gesture handler; the tabs above
+   drive the same scroller, so the two can never disagree about where you are.
+   `overscroll-behavior-x: contain` stops a swipe at either end from turning
+   into the browser's back gesture. */
+.garage__pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.garage__tab {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition: 0.16s;
+}
+
+.garage__tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.garage__tab--on {
+  color: var(--text);
+  border-color: var(--red);
+  background: rgba(229, 20, 43, 0.12);
+}
+
+.garage__pager-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.garage__pages {
+  display: flex;
+  /* The garage is a flex column, so without this the pager is squeezed to
+     whatever height is left over and `overflow-y: hidden` quietly crops the
+     bottom of both pages. It takes its content's height; the garage scrolls. */
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* Each page keeps its own height instead of being stretched to the taller
+     one; the guide's section list is capped so the difference stays small. */
+  align-items: flex-start;
+  margin-top: 12px;
+}
+
+.garage__pages::-webkit-scrollbar {
+  display: none;
+}
+
+.garage__page {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* Room for focus rings, which the scroller would otherwise clip. */
+  padding: 2px;
+}
+
+.guide__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.guide__back {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: 0.16s;
+}
+
+.guide__back:hover {
+  color: var(--text);
+  border-color: var(--red);
+}
+
+.guide__titles {
+  min-width: 0;
+}
+
+.guide__eyebrow {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.guide__title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.guide__stats {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+}
+
+.guide__stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.guide__stats b {
+  font-family: var(--font-mono);
+  font-size: 19px;
+}
+
+.guide__stats span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.guide__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.guide__mapwrap {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #0d1117;
+  padding: 12px;
+}
+
+.guide__map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The circuit is drawn twice: a wide dark ribbon for the road itself and a
+   thin light line down the middle of it, which is what makes a 20 km lap
+   squeezed into 600 px still read as a road rather than as a scribble. */
+.guide__ribbon {
+  fill: none;
+  stroke: #2b333f;
+  stroke-width: 7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.guide__centre {
+  fill: none;
+  stroke: #6d7c8d;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.guide__run {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.guide__dot {
+  fill: #0d1117;
+  stroke: #7d8b9c;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: r 0.15s;
+}
+
+.guide__dot:hover {
+  stroke: var(--text);
+}
+
+.guide__dot.is-active {
+  fill: var(--red);
+  stroke: #fff;
+}
+
+.guide__start {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2.4;
+  pointer-events: none;
+}
+
+.guide__profile {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.guide__profile-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.guide__profile-mark {
+  stroke: var(--red);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.guide__profile-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.guide__profile-legend span:nth-child(2) {
+  text-align: center;
+}
+
+.guide__panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.guide__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide__note-fig {
+  width: 58px;
+  flex: 0 0 58px;
+  height: auto;
+}
+
+.guide__note-body {
+  min-width: 0;
+}
+
+.guide__note-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.guide__note-head b {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.guide__note-head span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.guide__note p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #c3ccd7;
+  animation: mueller-say 0.3s ease-out both;
+}
+
+/* Capped so the guide page stays roughly as tall as the fleet page it sits
+   beside — otherwise the shorter page trails a screen of empty space. */
+.guide__list {
+  list-style: none;
+  max-height: min(430px, 44vh);
+  overflow-y: auto;
+  margin-bottom: 18px;
+  padding-right: 4px;
+}
+
+.guide__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: 0.14s;
+}
+
+.guide__row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.guide__row--active {
+  background: rgba(229, 20, 43, 0.13);
+  border-color: rgba(229, 20, 43, 0.4);
+}
+
+.guide__row-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.guide__row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide__row-km {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.guide__facts {
+  display: grid;
+  gap: 10px;
+}
+
+.guide__fact {
+  display: grid;
+  grid-template-columns: 92px auto;
+  gap: 2px 12px;
+  align-items: baseline;
+}
+
+.guide__fact-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.guide__fact b {
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+
+.guide__fact-note {
+  grid-column: 2;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+@media (max-width: 1000px) {
+  .guide__body {
+    grid-template-columns: 1fr;
+  }
+
+  .guide__title {
+    font-size: 27px;
+  }
+
+  .guide__stats {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .guide__stats div {
+    align-items: flex-start;
   }
 }
