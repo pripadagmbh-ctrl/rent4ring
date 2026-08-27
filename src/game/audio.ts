@@ -12,6 +12,7 @@ export class EngineAudio {
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
   private started = false;
+  private disposed = false;
   /** Engine damp — set for pause AND user mute. */
   private muted = false;
   /**
@@ -24,14 +25,32 @@ export class EngineAudio {
   constructor(private car: Car) {}
 
   async start(): Promise<void> {
-    if (this.started) return;
+    if (this.started || this.disposed) return;
     this.started = true;
 
+    try {
+      await this.boot();
+    } catch {
+      // Autoplay policies and flaky devices land here. Clearing the flag
+      // lets the next user gesture try again instead of staying silent for
+      // the rest of the session.
+      this.started = false;
+    }
+  }
+
+  private async boot(): Promise<void> {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
     const ctx = new Ctor();
     this.ctx = ctx;
     if (ctx.state === 'suspended') await ctx.resume();
+    // dispose() may have run while resume() was pending (StrictMode's
+    // double-mount does exactly this) — abandon the half-built graph.
+    if (this.disposed) {
+      void ctx.close().catch(() => undefined);
+      this.ctx = null;
+      return;
+    }
 
     const master = ctx.createGain();
     master.gain.value = 0.0001;
@@ -52,19 +71,21 @@ export class EngineAudio {
     filter.connect(master);
     this.filter = filter;
 
-    // Harmonic stack — an EV is dominated by a high whine, an engine by low orders.
-    const harmonics = this.car.electric
+    // Harmonic stack — an EV is dominated by a high whine, an engine by low
+    // orders. Gains come from baseGainFor, the same single source update()
+    // uses, so the two can never drift apart again.
+    const harmonics: { mult: number; type: OscillatorType }[] = this.car.electric
       ? [
-          { mult: 1, gain: 0.1, type: 'sine' as OscillatorType },
-          { mult: 6, gain: 0.28, type: 'sawtooth' as OscillatorType },
-          { mult: 12, gain: 0.14, type: 'sine' as OscillatorType },
+          { mult: 1, type: 'sine' },
+          { mult: 6, type: 'sawtooth' },
+          { mult: 12, type: 'sine' },
         ]
       : [
-          { mult: 0.5, gain: 0.34, type: 'sawtooth' as OscillatorType },
-          { mult: 1, gain: 0.3, type: 'sawtooth' as OscillatorType },
-          { mult: 1.5, gain: 0.16, type: 'square' as OscillatorType },
-          { mult: 2, gain: 0.12, type: 'sawtooth' as OscillatorType },
-          { mult: 3, gain: 0.07, type: 'sine' as OscillatorType },
+          { mult: 0.5, type: 'sawtooth' },
+          { mult: 1, type: 'sawtooth' },
+          { mult: 1.5, type: 'square' },
+          { mult: 2, type: 'sawtooth' },
+          { mult: 3, type: 'sine' },
         ];
 
     for (const h of harmonics) {
@@ -72,7 +93,7 @@ export class EngineAudio {
       osc.type = h.type;
       osc.frequency.value = 60;
       const gain = ctx.createGain();
-      gain.gain.value = h.gain;
+      gain.gain.value = baseGainFor(h.mult, this.car.electric);
       osc.connect(gain).connect(filter);
       osc.start();
       this.oscillators.push({ osc, gain, mult: h.mult });
@@ -107,7 +128,7 @@ export class EngineAudio {
    */
   update(rpmRatio: number, load: number, speedKmh: number, slip: number): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted) return;
+    if (!ctx || !this.master) return;
     const now = ctx.currentTime;
 
     const base = this.car.electric ? 55 + rpmRatio * 420 : 32 + rpmRatio * this.car.redlineRpm * 0.021;
@@ -116,7 +137,7 @@ export class EngineAudio {
       osc.frequency.setTargetAtTime(base * mult, now, 0.045);
       // Load opens up the higher orders — that is most of the "on throttle" character.
       const loadBoost = mult > 1 ? 0.55 + load * 0.75 : 1;
-      gain.gain.setTargetAtTime(gain.gain.value * 0 + baseGainFor(mult, this.car.electric) * loadBoost, now, 0.08);
+      gain.gain.setTargetAtTime(baseGainFor(mult, this.car.electric) * loadBoost, now, 0.08);
     }
 
     if (this.filter) {
@@ -142,6 +163,10 @@ export class EngineAudio {
     gain.gain.setValueAtTime(0.16, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
     osc.connect(gain).connect(this.master);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
     osc.start(now);
     osc.stop(now + 0.14);
   }
@@ -159,6 +184,10 @@ export class EngineAudio {
     gain.gain.setValueAtTime(Math.min(0.4, strength * 0.4), now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
     osc.connect(gain).connect(this.master);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
     osc.start(now);
     osc.stop(now + 0.32);
   }
@@ -182,6 +211,10 @@ export class EngineAudio {
       gain.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
       osc.connect(gain).connect(this.sfx!);
+      osc.onended = () => {
+        osc.disconnect();
+        gain.disconnect();
+      };
       osc.start(t);
       osc.stop(t + 0.45);
     });
@@ -195,6 +228,7 @@ export class EngineAudio {
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const { osc } of this.oscillators) {
       try {
         osc.stop();
@@ -208,7 +242,7 @@ export class EngineAudio {
     } catch {
       /* already stopped */
     }
-    this.ctx?.close();
+    void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
     this.started = false;
   }
