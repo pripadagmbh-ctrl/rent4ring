@@ -126,6 +126,35 @@ export interface HomeBaseFrame {
 }
 
 /**
+ * The whole site stands at a slight angle to the Burgstraße rather than square
+ * to it — a yard grown around a building, not laid out on a drawing board.
+ *
+ * Two things fix both the sign and the size, and both were measured against
+ * the generated approach rather than guessed. The site sits inside a hairpin,
+ * with the road passing on the near side going out and again on the far side
+ * coming back, so there is very little room to turn in:
+ *
+ *   · the turning head and link lane already reach to 1.27 m of the returning
+ *     leg's centreline — inside its 3.1 m half-width. Turning the site the
+ *     other way pushes them further in; at 4° they swallow a whole lane.
+ *   · the shed's road-side wall stands 4.10 m off the outbound centreline,
+ *     i.e. a metre back from the kerb. Turning much past 2° walks it into the
+ *     carriageway, and it is 6 m tall.
+ *
+ * +0.03 rad backs the turning head out to 2.13 m while leaving the shed at
+ * 3.57 m — the only direction where the tarmac gets better rather than worse.
+ *
+ * The turn also has to be about the junction rather than about the local
+ * origin. About the origin, the far end of the link lane swings a metre and a
+ * half clear of the road it is supposed to join; about the junction that end
+ * barely moves and everything else — shed, forecourt, ramp, turning head, the
+ * parked fleet, the crowd, the camera — swings behind it.
+ */
+const TWIST = 0.03;
+/** Where the link lane meets the road, in local coordinates. */
+const TWIST_PIVOT = { x: LINK.minX, z: (LINK.minZ + LINK.maxZ) / 2 };
+
+/**
  * Where the yard sits in the world. Anchored to the very start of the approach
  * so the buildings, the ramp and the driving line all move together if the
  * track data is ever regenerated.
@@ -137,7 +166,18 @@ export function homeBaseFrame(approach: Approach): HomeBaseFrame {
     .addScaledVector(p.normal, p.halfWidth + YARD_OFFSET)
     .addScaledVector(p.tangent, -YARD_BACK);
   position.y -= DIP;
-  return { position, yaw: Math.atan2(p.tangent.x, p.tangent.z) };
+  const yaw = Math.atan2(p.tangent.x, p.tangent.z);
+
+  // Rotating the frame alone would spin the site about its origin. Shifting the
+  // origin by (P - R(TWIST)·P) cancels that out at the pivot, so the extra yaw
+  // reads as a rotation about P instead. Everything downstream of this frame —
+  // `toWorld`, the buildings' group transform, the route — inherits it.
+  const c = Math.cos(TWIST);
+  const s = Math.sin(TWIST);
+  const { x, z } = TWIST_PIVOT;
+  const shift = { x: x - (x * c + z * s), z: z - (-x * s + z * c) };
+  const base: HomeBaseFrame = { position, yaw };
+  return { position: toWorld(base, shift.x, 0, shift.z), yaw: yaw + TWIST };
 }
 
 /** Local yard coordinates into world space. */

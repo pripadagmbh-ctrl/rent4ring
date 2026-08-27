@@ -348,6 +348,46 @@ export class GarageScene {
     sign.rotation.y = Math.PI / 2;
     this.scene.add(sign);
 
+    // ------------------------------------------------ the red couch
+    // Back right, against the wall behind the turntable — the corner where
+    // people actually sit and wait while their car is prepared. Placed at
+    // x=2.6 rather than further along the wall: projected into the fixed
+    // showroom camera, 3.9 put it at 0.95 of the way to the frame edge, so
+    // half of it was outside the picture. 2.6 sits at 0.73 and reads whole.
+    const couchRed = push(new THREE.MeshStandardMaterial({ color: 0xa8232c, roughness: 0.86 }));
+    const couchDark = push(new THREE.MeshStandardMaterial({ color: 0x2a2020, roughness: 0.9 }));
+    const couch = new THREE.Group();
+    couch.position.set(2.6, 0, -4.35);
+    couch.rotation.y = 0.16;
+    const couchBase = new THREE.Mesh(push(new THREE.BoxGeometry(2.2, 0.34, 0.86)), couchRed);
+    couchBase.position.y = 0.28;
+    const couchBack = new THREE.Mesh(push(new THREE.BoxGeometry(2.2, 0.66, 0.2)), couchRed);
+    couchBack.position.set(0, 0.68, -0.33);
+    couchBack.rotation.x = -0.12;
+    couch.add(couchBase, couchBack);
+    // Two cushions, so it does not read as a bench.
+    const cushionGeo = push(new THREE.BoxGeometry(1.02, 0.16, 0.78));
+    for (const x of [-0.55, 0.55]) {
+      const cushion = new THREE.Mesh(cushionGeo, couchRed);
+      cushion.position.set(x, 0.53, 0.02);
+      couch.add(cushion);
+    }
+    const armGeo = push(new THREE.BoxGeometry(0.22, 0.52, 0.9));
+    for (const x of [-1.1, 1.1]) {
+      const arm = new THREE.Mesh(armGeo, couchRed);
+      arm.position.set(x, 0.44, 0);
+      couch.add(arm);
+    }
+    const footGeo = push(new THREE.BoxGeometry(0.1, 0.12, 0.1));
+    for (const x of [-0.95, 0.95]) {
+      for (const z of [-0.32, 0.32]) {
+        const foot = new THREE.Mesh(footGeo, couchDark);
+        foot.position.set(x, 0.06, z);
+        couch.add(foot);
+      }
+    }
+    this.scene.add(couch);
+
     // ------------------------------------------- the Panigale in the corner
     // Off the dais on the right, angled so the visitor gets the front three
     // quarter from the bike's right — the side Ducati leaves bare, because

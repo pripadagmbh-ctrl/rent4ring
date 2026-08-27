@@ -561,8 +561,13 @@ button {
 }
 
 /* =================================================================== pause */
+/* Fixed, not absolute. The garage scrolls, and an absolutely positioned
+   child of a scrolling box is placed against the top of its content rather
+   than against the visible area — so on a phone, where you have to scroll
+   down to reach "Head out", the deposit dialog opened somewhere above the
+   screen. Every dialog in the game sat on the same fault. */
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(4, 6, 9, 0.86);
   backdrop-filter: blur(14px);

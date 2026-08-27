@@ -68,6 +68,31 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
           damageCost={hud.damageCost}
           damage={hud.damage}
         />
+
+        {/* Dale sits directly under Herr Müller, in the same column. At the
+            bottom of the screen the two of them were at opposite corners and
+            you could not read both without moving your eyes off the road. */}
+        {hud.dale && (
+          <div
+            className={`dale-call dale-call--${hud.dale.kind} ${hud.dale.apologising ? 'is-aside' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            <Dale
+              className="dale-call__fig"
+              urgent={hud.dale.kind !== 'line'}
+              sheepish={hud.dale.apologising}
+            />
+            <div className="dale-call__body">
+              <span className="dale-call__who">
+                {hud.dale.apologising ? 'Dale → Herr Müller' : 'Dale'}
+              </span>
+              <span key={hud.dale.text} className="dale-call__text">
+                {hud.dale.text}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------- section (top mid) */}
@@ -134,31 +159,6 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
         <div className="instrument__value">{hud.instrument.value}</div>
         <div className="instrument__label">{hud.instrument.label}</div>
       </div>
-
-      {/* Dale, calling the next corner from the passenger seat. Bottom
-          centre, where the eye already is on the road ahead — and only while
-          he is actually saying something. */}
-      {hud.dale && (
-        <div
-          className={`dale-call dale-call--${hud.dale.kind} ${hud.dale.apologising ? 'is-aside' : ''}`}
-          role="status"
-          aria-live="polite"
-        >
-          <Dale
-            className="dale-call__fig"
-            urgent={hud.dale.kind !== 'line'}
-            sheepish={hud.dale.apologising}
-          />
-          <div className="dale-call__body">
-            <span className="dale-call__who">
-              {hud.dale.apologising ? 'Dale → Herr Müller' : 'Dale'}
-            </span>
-            <span key={hud.dale.text} className="dale-call__text">
-              {hud.dale.text}
-            </span>
-          </div>
-        </div>
-      )}
 
       {!onApproach && <Minimap carPos={hud.carPos} ghostPos={hud.ghostPos} />}
 

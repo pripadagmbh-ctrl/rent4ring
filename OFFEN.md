@@ -55,3 +55,25 @@ dieser Strecke praktisch nie. Der Befund ist trotzdem behoben (die systematische
 Schwäche für hypothetisch schnellere Autos ist weg), aber es gibt kein
 Vorher/Nachher-Delta als Nachweis — hier nur festgehalten, damit das später nicht
 als „Fix hat nicht gewirkt" missverstanden wird.
+
+---
+
+## O4 — Wendehammer und Verbindungsfahrbahn überlappen die Rückführung der Burgstraße
+
+Beim Eindrehen des Areals (TWIST in `src/game/departure.ts`) vermessen: Das
+Grundstück liegt in einer Haarnadel, die Straße läuft auf der einen Seite hinaus
+und auf der anderen wieder zurück. Der Wendehammer (`PLATEAU`) und die
+Verbindungsfahrbahn (`LINK`) reichten bis auf **1,27 m** an die Mittellinie des
+zurücklaufenden Astes heran — bei einer halben Fahrbahnbreite von 3,1 m liegt
+das Teer also mitten auf der Straße. Die Drehung um +0,03 rad hat den Abstand
+auf **2,13 m** verbessert, aber nicht behoben; mehr ging nicht, weil die
+straßenseitige Hallenwand nur 4,10 m von der Mittellinie des hinausführenden
+Astes entfernt steht und ab etwa 2° selbst in die Fahrbahn wandert.
+
+**Warum nicht umgesetzt:** Nicht beauftragt, und die saubere Lösung ist keine
+Drehung, sondern ein neuer Zuschnitt — Wendehammer schmaler oder weiter nach
+Osten, was die U-Turn-Choreografie und die Flotten-Stellplätze mit betrifft.
+
+**Relevanz:** Kosmetisch bis mittel. Sichtbar nur, wenn man von der Strecke aus
+zum Hof zurückschaut; die Fahrlinie selbst berührt die Stelle nie.
+
