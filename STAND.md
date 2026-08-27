@@ -23,13 +23,17 @@ angelegt.
   rammt 111 bis 348 Mal die Leitplanke; seine Zeiten sind zu schnell, weil er
   abkürzt, nicht weil die Ziele zu weich wären. Solange das so ist, gibt es
   keinen belastbaren Maßstab für den Schwierigkeitsgrad.
-- **Gesprochene Zeilen liegen auf Eis.** Der Commit mit den Browser-Stimmen
-  (`speechSynthesis`, deutsche Stimme für Herrn Müller, britische für Dale) ist
-  fertig, aber nicht hochgeladen: der Nutzer fand die verfügbaren Stimmen zu
-  künstlich. Ursache ist die Engine — auf dem Testrechner stellt Chrome nur
-  sechs alte Microsoft-SAPI-Stimmen bereit, keine neuronalen. Ein Aufnahmeskript
-  mit allen 184 Zeilen in 29 Aufnahmen existiert für den Fall, dass echte
-  Aufnahmen kommen.
+- **Gesprochene Zeilen wurden versucht und wieder entfernt.** Die Browser-
+  Sprachausgabe (`speechSynthesis`, deutsche Stimme für Herrn Müller auf
+  englischem Text, britische für Dale) war gebaut und gemessen, klang aber zu
+  künstlich, um sie auszuliefern — Ursache ist die Engine: auf dem Testrechner
+  stellt Chrome nur sechs alte Microsoft-SAPI-Stimmen bereit, keine neuronalen.
+  Der Commit steht in der Historie des Branches und wurde bewusst
+  zurückgenommen, nicht vergessen. Wer es wieder aufgreift, findet dort auch
+  die beiden Fallen: die stille Aufwärmzeile verschluckt die erste echte, und
+  `onend` feuert nicht auf jeder Engine.
+  Ein Aufnahmeskript mit allen 184 Zeilen in 29 Aufnahmen existiert für den
+  Fall, dass echte Aufnahmen kommen.
 
 ## Wichtige Lektion für Grafik-Debugging in diesem Projekt
 

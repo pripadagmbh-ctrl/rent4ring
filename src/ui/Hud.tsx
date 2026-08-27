@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
 import type { HudState } from '../game/Game';
-import { say } from '../game/speech';
 import { formatDelta, formatDistance, formatLap } from './format';
 import Minimap from './Minimap';
 import MuellerPanel from './MuellerPanel';
@@ -13,22 +11,6 @@ interface Props {
 }
 
 export default function Hud({ hud, onPause, onSkipApproach }: Props) {
-  // Both of them say out loud whatever the HUD is showing. Dale's braking
-  // points and warnings go out urgent so they can cut through anything Herr
-  // Müller is still finishing — a call that arrives after the corner is worse
-  // than an interrupted sentence. His plain racing-line notes wait their turn.
-  const daleText = hud.dale?.text ?? '';
-  const daleKind = hud.dale?.kind ?? 'line';
-  useEffect(() => {
-    if (daleText) say('dale', daleText, daleKind === 'line' ? 'normal' : 'urgent');
-  }, [daleText, daleKind]);
-
-  // He only speaks up when he has something to say, and when he does it is
-  // usually about his own car, so it cuts in.
-  useEffect(() => {
-    if (hud.muellerLine) say('mueller', hud.muellerLine, 'urgent');
-  }, [hud.muellerLine]);
-
   const revPct = Math.min(1, Math.max(0, hud.rpmRatio)) * 100;
   const atLimit = hud.rpmRatio > 0.94;
   // The countdown starts at 3.2 s and the car is released at 0 — the 0.2 s
