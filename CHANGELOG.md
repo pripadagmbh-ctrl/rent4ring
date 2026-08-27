@@ -64,10 +64,15 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
   diesen Kopf keiner geht — deshalb erkennt man ihn auch. Und er kann sich
   nicht ducken: er sitzt aufrecht, Knie nach außen. Das Motorrad hat die
   richtige Größe, der Mann nicht.
-- **Reifenspuren auf der Strecke.** Wo die Reifen loslassen, bleibt Gummi
-  liegen — gesteuert von derselben Grip-Zahl wie das Quietschen, damit Bild und
-  Ton nie etwas Unterschiedliches behaupten. Als ein vorab angelegter
-  Ringpuffer gebaut, der nach dem Start nichts mehr allokiert.
+- **Reifenspuren auf der Strecke**, und zwar nur da, wo wirklich etwas
+  passiert: im Gras und im Kies bei jedem Tempo, auf Asphalt erst jenseits der
+  Haftgrenze, und beim Anfahren zwei kurze Streifen der Antriebsachse, die mit
+  dem Tempo verschwinden. Als ein vorab angelegter Ringpuffer gebaut, der nach
+  dem Start nichts mehr allokiert.
+- **Wheelie auf dem Motorrad**: zweimal kurz hintereinander X. Braucht Gas und
+  ein Tempo zwischen 25 und 140 km/h; Gas weg oder Bremse antippen und das Rad
+  kommt sofort wieder herunter. Solange es oben ist, lenkt das Vorderrad fast
+  nichts mehr.
 - **Schäden am Auto deutlich sichtbarer.** Kleine Anbauteile — Splitter,
   Grill, Scheinwerfer, Flügel — verziehen sich jetzt stärker als die Karosse,
   weil ein Rempler genau die zuerst erwischt. Bis zu 10,5 cm Versatz statt

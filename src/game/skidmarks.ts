@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 
 /**
- * Rubber left on the road where the tyres let go.
+ * What the tyres leave behind: rubber on tarmac, churned earth off it.
  *
- * Driven by exactly the same grip-usage number as the tyre squeal, so what you
- * see and what you hear can never disagree: if it howls, it marks.
+ * The buffer draws what it is told to draw; *when* to mark is decided in
+ * `Game.layRubber`, because that is where the surface, the drivetrain and the
+ * throttle are known. Worth stating the difference from the tyre squeal, since
+ * both read the same grip number: the squeal starts at 84 % of grip, because a
+ * tyre howls while it is still gripping and letting go. Marking starts past
+ * 100 %, because that is where it stops gripping and starts abrading. Tying
+ * the two together put a black line down every corner taken properly.
  *
  * Built as one pre-allocated ring buffer rather than a mesh per mark. A lap is
  * twenty kilometres and a slide can last hundreds of metres, so anything that
@@ -17,24 +22,22 @@ import * as THREE from 'three';
 const MAX_SEGMENTS = 2200;
 /** How far a wheel travels before it lays down another segment, metres. */
 const STEP = 0.55;
-/** Grip usage at which rubber starts coming off. Matches the squeal's floor. */
-const MARK_FROM = 0.9;
-/** Below this there is no slide worth drawing, km/h. */
-const MIN_SPEED = 12;
 /** Tyre width on the road. */
 const HALF_WIDTH = 0.11;
 /** Above the tarmac, metres. Enough to clear it, small enough not to float. */
 const LIFT = 0.02;
 
+/** What the tyre is marking, which decides what colour it leaves. */
+export type MarkKind = 'rubber' | 'dirt';
+
 export interface SkidMarks {
   mesh: THREE.Mesh;
   /**
-   * @param wheels  ground positions of the wheels, in world space
-   * @param heading unit vector the car is travelling along
-   * @param grip    tyre grip usage; 1 is the limit
-   * @param speedKmh road speed
+   * @param wheels   ground positions of the wheels, in world space
+   * @param strength 0-1 per wheel; 0 leaves nothing and breaks that trail
+   * @param kind     black rubber on tarmac, pale dust off it
    */
-  update(wheels: THREE.Vector3[], heading: THREE.Vector3, grip: number, speedKmh: number): void;
+  update(wheels: THREE.Vector3[], strength: number[], kind: MarkKind): void;
   /** Wipes every mark — a new lap starts on a clean road. */
   clear(): void;
   dispose(): void;
@@ -75,7 +78,7 @@ export function buildSkidMarks(): SkidMarks {
   const up = new THREE.Vector3(0, 1, 0);
 
   /** Writes one quad from `from` to `to`, `strength` deep. */
-  const push = (from: THREE.Vector3, to: THREE.Vector3, strength: number): void => {
+  const push = (from: THREE.Vector3, to: THREE.Vector3, strength: number, kind: MarkKind): void => {
     side.subVectors(to, from);
     if (side.lengthSq() < 1e-6) return;
     side.normalize().cross(up).multiplyScalar(HALF_WIDTH);
@@ -95,13 +98,18 @@ export function buildSkidMarks(): SkidMarks {
     corner(4, to, 1);
     corner(5, to, -1);
 
-    const alpha = 0.25 + strength * 0.55;
+    // Warm black for rubber — fresh rubber on grey tarmac is never a pure
+    // black — and pale Eifel earth for everything churned up off the circuit.
+    const rubber = kind === 'rubber';
+    const cr = rubber ? 0.055 : 0.3;
+    const cg = rubber ? 0.048 : 0.245;
+    const cb = rubber ? 0.045 : 0.18;
+    const alpha = (rubber ? 0.25 : 0.32) + strength * 0.55;
     for (let n = 0; n < 6; n++) {
       const c = (i + n) * 4;
-      // Warm black: fresh rubber on grey tarmac is never a pure black.
-      colors[c] = 0.055;
-      colors[c + 1] = 0.048;
-      colors[c + 2] = 0.045;
+      colors[c] = cr;
+      colors[c + 1] = cg;
+      colors[c + 2] = cb;
       colors[c + 3] = alpha;
     }
 
@@ -111,18 +119,16 @@ export function buildSkidMarks(): SkidMarks {
 
   return {
     mesh,
-    update(wheels, heading, grip, speedKmh) {
-      void heading;
-      const strength = Math.min(1, Math.max(0, (grip - MARK_FROM) / 0.3));
-      if (strength <= 0 || speedKmh < MIN_SPEED) {
-        // Break the trail, or the next slide would be joined to this one by a
-        // single quad stretched across everything in between.
-        for (let i = 0; i < lastAt.length; i++) lastAt[i] = null;
-        return;
-      }
-
+    update(wheels, strength, kind) {
       let wrote = false;
       for (let i = 0; i < wheels.length; i++) {
+        const s = strength[i] ?? 0;
+        if (s <= 0) {
+          // Break this wheel's trail, or the next mark would be joined to the
+          // last one by a single quad stretched across everything between.
+          lastAt[i] = null;
+          continue;
+        }
         const now = wheels[i];
         const prev = lastAt[i];
         if (!prev) {
@@ -132,7 +138,7 @@ export function buildSkidMarks(): SkidMarks {
         if (prev.distanceToSquared(now) < STEP * STEP) continue;
         a.copy(prev);
         b.copy(now);
-        push(a, b, strength);
+        push(a, b, s, kind);
         prev.copy(now);
         wrote = true;
       }

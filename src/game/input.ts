@@ -56,6 +56,8 @@ export class InputManager {
   onCameraToggle?: () => void;
   onReset?: () => void;
   onPause?: () => void;
+  /** Double-tap X. Only the bike does anything with it. */
+  onWheelie?: () => void;
 
   private readonly handleDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
@@ -73,6 +75,17 @@ export class InputManager {
     if (k === 'c') this.onCameraToggle?.();
     if (k === 'r') this.onReset?.();
     if (k === 'escape' || k === 'p') this.onPause?.();
+    if (k === 'x') {
+      const now = performance.now();
+      // Second tap inside the window, and the window then closes — three taps
+      // in a row are one wheelie, not two.
+      if (now - this.lastX < DOUBLE_TAP_MS) {
+        this.lastX = 0;
+        this.onWheelie?.();
+      } else {
+        this.lastX = now;
+      }
+    }
   };
 
   private readonly handleUp = (e: KeyboardEvent) => {
@@ -143,6 +156,8 @@ export class InputManager {
   }
 
   private padPauseHeld = false;
+  /** When X was last tapped, for the double-tap that pulls a wheelie. */
+  private lastX = 0;
 
   update(dt: number): DriveInput {
     const pad = readGamepad();
@@ -241,6 +256,12 @@ export class InputManager {
  * hold, short enough that a stuck key is a blip rather than the drive.
  */
 const STUCK_MS = 1000;
+
+/**
+ * How long the second tap of a double-tap may take. 320 ms is comfortably
+ * inside what reads as "twice" and comfortably outside an accidental repeat.
+ */
+const DOUBLE_TAP_MS = 320;
 
 const CONSUMED = new Set([
   'arrowup',

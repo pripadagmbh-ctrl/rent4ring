@@ -226,6 +226,9 @@ export class Game {
   /** The Starenkasten in the village, and whether it has had you yet. */
   private speedCamera: SpeedCamera | null = null;
   private skidMarks: SkidMarks | null = null;
+  /** Seconds of wheelie left, and the eased nose-up angle in radians. */
+  private wheelieFor = 0;
+  private wheelieAngle = 0;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
@@ -446,6 +449,7 @@ export class Game {
     this.input.onCameraToggle = () => {
       if (!this.paused) this.cycleCamera();
     };
+    this.input.onWheelie = () => this.startWheelie();
     this.input.onReset = () => {
       if (!this.paused) this.recover();
     };
@@ -581,7 +585,7 @@ export class Game {
   }
 
   private simulate(dt: number): void {
-    const input = this.input.update(dt);
+    let input = this.input.update(dt);
 
     if (this.phase === 'departure') {
       this.updateDeparture(dt);
@@ -610,7 +614,14 @@ export class Game {
       }
     }
 
+    // A front wheel in the air steers nothing much, so the input is trimmed
+    // before it reaches the physics rather than after — trimming afterwards
+    // would leave the HUD and the front-wheel visual disagreeing with the car.
+    if (this.wheelieFor > 0) {
+      input = { ...input, steer: input.steer * WHEELIE_STEER };
+    }
     this.telemetry = this.vehicle.step(dt, input, this.road);
+    this.updateWheelie(dt);
     this.topSpeed = Math.max(this.topSpeed, this.telemetry.speedKmh);
 
     this.applyDamage(this.telemetry, dt);
@@ -1188,10 +1199,21 @@ export class Game {
 
   // -------------------------------------------------------------- visuals
   /**
-   * Puts the four contact patches where the wheels actually are and hands them
-   * to the mark buffer. The positions come from the vehicle's own frame rather
-   * than from the wheel meshes: the meshes carry steering and spin, and a
-   * contact patch does neither.
+   * Puts the four contact patches where the wheels actually are and decides,
+   * per wheel, whether anything is being left behind. The positions come from
+   * the vehicle's own frame rather than from the wheel meshes: the meshes
+   * carry steering and spin, and a contact patch does neither.
+   *
+   * Three ways to mark the ground, and only three — the first version marked
+   * continuously from 90 % of grip, which meant a black line down every corner
+   * taken properly. A tyre at the limit is gripping, not abrading.
+   *
+   *  · **Off the circuit.** Grass and gravel churn under any wheel that is
+   *    turning, at any speed. Nothing has to go wrong for a car to leave ruts
+   *    across a verge.
+   *  · **Actually sliding.** On tarmac, past the limit rather than near it.
+   *  · **Wheelspin off the line.** Driven axle only, and it fades out as the
+   *    car gets going, so it is a launch mark and not a trail.
    */
   private layRubber(): void {
     const marks = this.skidMarks;
@@ -1216,8 +1238,42 @@ export class Game {
         );
       }
     }
-    marks.update(this.rubberPoints, fwd, t.gripUsage, t.speedKmh);
+    // Index order above: 0,1 front · 2,3 rear.
+    const w = this.rubberStrength;
+    w[0] = w[1] = w[2] = w[3] = 0;
+
+    if (t.offTrack && t.speedKmh > 3) {
+      const dust = Math.min(1, t.speedKmh / 70);
+      w[0] = w[1] = w[2] = w[3] = dust;
+      marks.update(this.rubberPoints, w, 'dirt');
+      return;
+    }
+
+    // Past the limit, not near it. 1.0 is the limit; below SLIDE_FROM the
+    // tyre is working hard and staying put, which leaves nothing.
+    const sliding = Math.min(1, Math.max(0, (t.gripUsage - SLIDE_FROM) / 0.25));
+    if (sliding > 0 && t.speedKmh > 15) {
+      w[0] = w[1] = w[2] = w[3] = sliding;
+    }
+
+    // Wheelspin: hard throttle, still slow, and the tyre already at its limit.
+    // Gone by SPIN_UNTIL_KMH, so pulling away hard leaves two short stripes
+    // rather than a line all the way down the straight.
+    const spin =
+      this.input.state.throttle > 0.75 && t.gripUsage > 0.95
+        ? Math.max(0, 1 - t.speedKmh / SPIN_UNTIL_KMH)
+        : 0;
+    if (spin > 0) {
+      const drive = this.car.drivetrain;
+      if (drive !== 'RWD') w[0] = w[1] = Math.max(w[0], spin);
+      if (drive !== 'FWD') w[2] = w[3] = Math.max(w[2], spin);
+    }
+
+    marks.update(this.rubberPoints, w, 'rubber');
   }
+
+  /** Reused per frame alongside `rubberPoints`; one entry per wheel. */
+  private readonly rubberStrength = [0, 0, 0, 0];
 
   /** Reused every frame; the mark buffer must not allocate in the hot loop. */
   private readonly rubberPoints = [
@@ -1239,11 +1295,36 @@ export class Game {
     g.position.copy(v.position);
     g.rotation.set(0, 0, 0);
     g.rotateY(v.yaw);
-    g.rotateX(v.pitch);
+    g.rotateX(v.pitch + this.wheelieAngle);
     g.rotateZ(-v.roll);
+
+    // A wheelie pivots about the rear contact patch, not about the model's
+    // origin between the wheels. Rotating about the origin buries the rear
+    // tyre in the tarmac by a quarter of a metre at full lift — the nose does
+    // go up, but the bike sinks, and it reads as the road swallowing it.
+    // Undo the movement the rotation gives that one point.
+    if (this.wheelieAngle !== 0) {
+      const zr = -this.car.wheelbase * 0.5;
+      const sin = Math.sin(this.wheelieAngle);
+      const cos = Math.cos(this.wheelieAngle);
+      const dy = zr * sin;
+      const dz = zr * (1 - cos);
+      const fwd = v.forward;
+      g.position.y += dy;
+      g.position.x += fwd.x * dz;
+      g.position.z += fwd.z * dz;
+    }
 
     const spin = (v.vLong / 0.34) * dt;
     for (const w of this.carMesh.wheels) w.rotation.x -= spin;
+    // Nothing drives the front wheel once it is in the air; it keeps whatever
+    // rotation it had. Backing out the spin it was just given is cheaper than
+    // tracking which wheel is which through the mesh contract.
+    if (this.wheelieAngle < -0.05) {
+      for (const fw of this.carMesh.frontWheels) {
+        for (const child of fw.children) child.rotation.x += spin;
+      }
+    }
     // rotation.y is left-positive, the input is right-positive. During the
     // scripted departure the route steers, not the player.
     const steerInput = this.phase === 'departure' ? this.departureSteer : this.input.state.steer;
@@ -1370,6 +1451,47 @@ export class Game {
     this.cameraLook.copy(look);
     this.camera.position.copy(pos);
     this.camera.lookAt(look);
+  }
+
+  /**
+   * Double-tap X on the bike and the front wheel comes up.
+   *
+   * Gated on a speed band rather than allowed anywhere: below WHEELIE_MIN_KMH
+   * there is not enough drive to lift it and it would read as the bike simply
+   * tipping over backwards, and above WHEELIE_MAX_KMH nothing short of a jump
+   * gets a Panigale's nose off the ground. Throttle is required for the same
+   * reason it is required in life.
+   */
+  private startWheelie(): void {
+    if (!this.car.bike || this.wheelieFor > 0) return;
+    if (this.phase === 'departure' || this.phase === 'retired') return;
+    const kmh = this.telemetry?.speedKmh ?? 0;
+    if (kmh < WHEELIE_MIN_KMH || kmh > WHEELIE_MAX_KMH) return;
+    if (this.input.state.throttle < 0.4) return;
+    this.wheelieFor = WHEELIE_SECONDS;
+    this.setMood('cheer', pick(WHEELIE_LINES), 3);
+  }
+
+  /**
+   * Eases the nose up and back down, and drops it early if the rider does
+   * anything that would put it down in life: shuts the throttle, brakes, or
+   * runs out of the speed band.
+   */
+  private updateWheelie(dt: number): void {
+    if (this.wheelieFor > 0) {
+      const kmh = this.telemetry?.speedKmh ?? 0;
+      const bail =
+        this.input.state.throttle < 0.15 ||
+        this.input.state.brake > 0.1 ||
+        kmh < WHEELIE_MIN_KMH * 0.6 ||
+        kmh > WHEELIE_MAX_KMH * 1.15;
+      this.wheelieFor = bail ? 0 : Math.max(0, this.wheelieFor - dt);
+    }
+    const target = this.wheelieFor > 0 ? WHEELIE_ANGLE : 0;
+    // Up quickly, down more gently: a nose that slams back reads as a crash.
+    const rate = this.wheelieFor > 0 ? 5.2 : 2.6;
+    this.wheelieAngle += (target - this.wheelieAngle) * Math.min(1, dt * rate);
+    if (Math.abs(this.wheelieAngle) < 1e-4) this.wheelieAngle = 0;
   }
 
   // ----------------------------------------------------------------- misc
@@ -1623,6 +1745,25 @@ const FLOW_LINES = [
  * from the yard and the straightest run on the whole route — 0.8 degrees of
  * direction change over fifteen points.
  */
+/** The speed band in which the front wheel will actually come up. */
+const WHEELIE_MIN_KMH = 25;
+const WHEELIE_MAX_KMH = 140;
+/** How long he holds it before it comes back down. */
+const WHEELIE_SECONDS = 2.1;
+/** Nose-up angle at full lift. Negative is nose-up (see `pitch` in physics). */
+const WHEELIE_ANGLE = -0.42;
+/**
+ * A front wheel in the air steers nothing. Not zero — the bike still turns by
+ * leaning, and taking the steering away completely made it feel broken rather
+ * than airborne.
+ */
+const WHEELIE_STEER = 0.35;
+
+/** Grip usage past which a tyre is genuinely abrading rather than gripping. */
+const SLIDE_FROM = 1.02;
+/** Wheelspin marks are gone by this road speed, km/h. */
+const SPIN_UNTIL_KMH = 45;
+
 const SPEED_CAMERA_INDEX = 46;
 /** Built-up area, so 50. */
 const VILLAGE_LIMIT_KMH = 50;
@@ -1695,6 +1836,15 @@ function recordBan(): number {
  * So the rant turns inward, which is funnier and, by his own account,
  * entirely deserved.
  */
+/** What he says with the front wheel in the air. He is delighted and appalled. */
+const WHEELIE_LINES = [
+  'Front wheel up! Do not tell the insurer. Do not tell Dale either.',
+  'This is a demonstration of throttle control. That is what it says on the invoice.',
+  'Look at that. Fifty-eight years old and still an idiot.',
+  'One wheel does the work, the other one watches. Marvellous.',
+  'If it comes down sideways we never did this.',
+];
+
 const SELF_ANGRY_LINES = [
   'MUELLER! What in the name of God was that?',
   'Twenty-six years. Twenty-six years and I still do that.',
