@@ -1478,12 +1478,53 @@
   .mueller__stage .gorilla {
     width: 83px;
   }
+  /* No line clamp here. Cutting him off at three lines swallowed the end of
+     every longer remark, and half a punchline is worse than a tall panel. */
   .mueller__line {
     min-height: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  }
+}
+
+/* A short screen is nearly always a wide one — a phone on its side. Width is
+   the resource going spare there, height is the one that runs out, so the
+   panel turns on its side too: portrait beside the speech instead of above
+   it, and broad rather than tall. Stacked and 118 px wide, a long remark ran
+   to thirteen lines and pushed the panel onto the touch pads.
+
+   Kept off narrow portrait phones, where a panel this wide would be most of
+   the screen. */
+@media (max-height: 700px) and (min-width: 600px) {
+  .mueller {
+    width: min(420px, 52vw);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'face name'
+      'face line'
+      'dmg dmg';
+    column-gap: 9px;
+    align-items: start;
+  }
+  .mueller__stage {
+    grid-area: face;
+    height: 75px;
+    align-self: end;
+  }
+  .mueller__stage .gorilla {
+    width: 88px;
+  }
+  .mueller__name {
+    grid-area: name;
+    margin-top: 0;
+  }
+  .mueller__line {
+    grid-area: line;
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+  .mueller__damage {
+    grid-area: dmg;
   }
 }
 
@@ -1502,4 +1543,71 @@
   width: clamp(84px, 11.5vw, 116px);
   flex: none;
   margin-left: -10px;
+}
+
+/* Very short screens — an older phone on its side, 375 px of height with the
+   touch pads claiming the bottom 96. Everything below is about buying back
+   the last few pixels so nothing has to sit on anything else. */
+@media (max-height: 420px) {
+  /* The panel came to rest 7 px into the pads; a slightly smaller portrait
+     covers it, and the 260:220 ratio is kept so his head still fits. */
+  .mueller__stage {
+    height: 64px;
+  }
+  .mueller__stage .gorilla {
+    width: 76px;
+  }
+
+  /* Off-track warning is centred, and the wide panel now reaches past the
+     middle of a 667 px screen. The strip between the two pairs of pads is
+     empty, so it goes down there instead. */
+  .hud__warn {
+    top: auto;
+    bottom: calc(30px + var(--safe-bottom));
+  }
+
+  /* The right-hand column runs out of room below the minimap: the gauge sat
+     at 274 and the action pads start at 279. Moved into the free span
+     between the left and right pads. */
+  .instrument {
+    top: auto;
+    bottom: calc(26px + var(--safe-bottom));
+    right: calc(200px + var(--safe-right));
+  }
+
+  /* The last seven pixels. The panel's height is set by the text column, not
+     by the portrait, so shrinking him did nothing for it — these come out of
+     the damage readout instead, which is the least of the three. */
+  .mueller__line {
+    margin-bottom: 2px;
+  }
+  .mueller__damage-head {
+    font-size: 9px;
+  }
+  .mueller__damage-bar {
+    height: 4px;
+    margin-top: 3px;
+  }
+
+  /* And the final four: the whole left column starts 6 px higher. */
+  .hud__rail {
+    top: calc(10px + var(--safe-top));
+  }
+}
+
+/* 360 px of height. 80 px thumb pads eat 96 of it including their margin,
+   which is out of proportion on a screen this size and leaves nothing for
+   the panel above them. Smaller pads are the honest fix here — they are
+   still comfortably larger than the 44 px touch-target minimum. */
+@media (max-height: 380px) {
+  .ps-pad {
+    width: 66px;
+    height: 66px;
+  }
+  .ps-pad--right {
+    left: calc(84px + var(--safe-left));
+  }
+  .ps-pad--square {
+    right: calc(84px + var(--safe-right));
+  }
 }
