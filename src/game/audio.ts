@@ -11,35 +11,56 @@ export class EngineAudio {
   private noise: AudioBufferSourceNode | null = null;
   private noiseGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
-  /** Bus for one-shot SFX (fanfare) that must survive the pause-mute. */
-  private sfx: GainNode | null = null;
   private started = false;
-  /** Combined pause-or-user mute, driving the engine master. */
+  private disposed = false;
+  /** Engine damp — set for pause AND user mute. */
   private muted = false;
-  /** The user's actual mute toggle, driving the SFX bus. */
-  private userMuted = false;
+  /**
+   * The user's own sound toggle, tracked separately: pausing the game damps
+   * the engine but must not swallow one-shot SFX like the podium fanfare.
+   */
+  userMuted = false;
+  private sfx: GainNode | null = null;
 
   constructor(private car: Car) {}
 
   async start(): Promise<void> {
-    if (this.started) return;
+    if (this.started || this.disposed) return;
     this.started = true;
 
+    try {
+      await this.boot();
+    } catch {
+      // Autoplay policies and flaky devices land here. Clearing the flag
+      // lets the next user gesture try again instead of staying silent for
+      // the rest of the session.
+      this.started = false;
+    }
+  }
+
+  private async boot(): Promise<void> {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
     const ctx = new Ctor();
     this.ctx = ctx;
     if (ctx.state === 'suspended') await ctx.resume();
+    // dispose() may have run while resume() was pending (StrictMode's
+    // double-mount does exactly this) — abandon the half-built graph.
+    if (this.disposed) {
+      void ctx.close().catch(() => undefined);
+      this.ctx = null;
+      return;
+    }
 
     const master = ctx.createGain();
     master.gain.value = 0.0001;
     master.connect(ctx.destination);
     this.master = master;
 
-    // The fanfare bypasses the master: the ceremony pauses the game in the
-    // same moment it plays, and the pause-mute would swallow it otherwise.
+    // One-shot effects bypass the master so a paused (damped) engine cannot
+    // silence them; the user's mute still gates them at the call sites.
     const sfx = ctx.createGain();
-    sfx.gain.value = this.userMuted ? 0.0001 : 1;
+    sfx.gain.value = 0.9;
     sfx.connect(ctx.destination);
     this.sfx = sfx;
 
@@ -50,19 +71,21 @@ export class EngineAudio {
     filter.connect(master);
     this.filter = filter;
 
-    // Harmonic stack — an EV is dominated by a high whine, an engine by low orders.
-    const harmonics = this.car.electric
+    // Harmonic stack — an EV is dominated by a high whine, an engine by low
+    // orders. Gains come from baseGainFor, the same single source update()
+    // uses, so the two can never drift apart again.
+    const harmonics: { mult: number; type: OscillatorType }[] = this.car.electric
       ? [
-          { mult: 1, gain: 0.1, type: 'sine' as OscillatorType },
-          { mult: 6, gain: 0.28, type: 'sawtooth' as OscillatorType },
-          { mult: 12, gain: 0.14, type: 'sine' as OscillatorType },
+          { mult: 1, type: 'sine' },
+          { mult: 6, type: 'sawtooth' },
+          { mult: 12, type: 'sine' },
         ]
       : [
-          { mult: 0.5, gain: 0.34, type: 'sawtooth' as OscillatorType },
-          { mult: 1, gain: 0.3, type: 'sawtooth' as OscillatorType },
-          { mult: 1.5, gain: 0.16, type: 'square' as OscillatorType },
-          { mult: 2, gain: 0.12, type: 'sawtooth' as OscillatorType },
-          { mult: 3, gain: 0.07, type: 'sine' as OscillatorType },
+          { mult: 0.5, type: 'sawtooth' },
+          { mult: 1, type: 'sawtooth' },
+          { mult: 1.5, type: 'square' },
+          { mult: 2, type: 'sawtooth' },
+          { mult: 3, type: 'sine' },
         ];
 
     for (const h of harmonics) {
@@ -70,7 +93,7 @@ export class EngineAudio {
       osc.type = h.type;
       osc.frequency.value = 60;
       const gain = ctx.createGain();
-      gain.gain.value = h.gain;
+      gain.gain.value = baseGainFor(h.mult, this.car.electric);
       osc.connect(gain).connect(filter);
       osc.start();
       this.oscillators.push({ osc, gain, mult: h.mult });
@@ -93,6 +116,7 @@ export class EngineAudio {
     this.noise = noise;
     this.noiseGain = noiseGain;
 
+    // A drive started while muted must stay muted (H7).
     master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
 
@@ -104,7 +128,7 @@ export class EngineAudio {
    */
   update(rpmRatio: number, load: number, speedKmh: number, slip: number): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted) return;
+    if (!ctx || !this.master) return;
     const now = ctx.currentTime;
 
     const base = this.car.electric ? 55 + rpmRatio * 420 : 32 + rpmRatio * this.car.redlineRpm * 0.021;
@@ -113,7 +137,7 @@ export class EngineAudio {
       osc.frequency.setTargetAtTime(base * mult, now, 0.045);
       // Load opens up the higher orders — that is most of the "on throttle" character.
       const loadBoost = mult > 1 ? 0.55 + load * 0.75 : 1;
-      gain.gain.setTargetAtTime(gain.gain.value * 0 + baseGainFor(mult, this.car.electric) * loadBoost, now, 0.08);
+      gain.gain.setTargetAtTime(baseGainFor(mult, this.car.electric) * loadBoost, now, 0.08);
     }
 
     if (this.filter) {
@@ -139,6 +163,10 @@ export class EngineAudio {
     gain.gain.setValueAtTime(0.16, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
     osc.connect(gain).connect(this.master);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
     osc.start(now);
     osc.stop(now + 0.14);
   }
@@ -156,11 +184,19 @@ export class EngineAudio {
     gain.gain.setValueAtTime(Math.min(0.4, strength * 0.4), now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
     osc.connect(gain).connect(this.master);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
     osc.start(now);
     osc.stop(now + 0.32);
   }
 
-  /** Celebratory fanfare for the podium. */
+  /**
+   * Celebratory fanfare for the podium. Runs on the SFX bus: the ceremony
+   * pauses the game the moment the lap completes, and the pause damp on the
+   * master used to swallow the fanfare before its first note landed.
+   */
   fanfare(): void {
     const ctx = this.ctx;
     if (!ctx || !this.sfx || this.userMuted) return;
@@ -175,9 +211,21 @@ export class EngineAudio {
       gain.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
       osc.connect(gain).connect(this.sfx!);
+      osc.onended = () => {
+        osc.disconnect();
+        gain.disconnect();
+      };
       osc.start(t);
       osc.stop(t + 0.45);
     });
+  }
+
+  /** The user's mute toggle alone — pause must never silence the SFX bus. */
+  setUserMuted(muted: boolean): void {
+    this.userMuted = muted;
+    if (this.sfx && this.ctx) {
+      this.sfx.gain.setTargetAtTime(muted ? 0.0001 : 0.9, this.ctx.currentTime, 0.05);
+    }
   }
 
   setMuted(muted: boolean): void {
@@ -187,15 +235,8 @@ export class EngineAudio {
     }
   }
 
-  /** The user's mute toggle alone — pause must not silence the SFX bus. */
-  setUserMuted(muted: boolean): void {
-    this.userMuted = muted;
-    if (this.sfx && this.ctx) {
-      this.sfx.gain.setTargetAtTime(muted ? 0.0001 : 1, this.ctx.currentTime, 0.05);
-    }
-  }
-
   dispose(): void {
+    this.disposed = true;
     for (const { osc } of this.oscillators) {
       try {
         osc.stop();
@@ -209,7 +250,7 @@ export class EngineAudio {
     } catch {
       /* already stopped */
     }
-    this.ctx?.close();
+    void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
     this.started = false;
   }

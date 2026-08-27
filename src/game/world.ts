@@ -101,6 +101,7 @@ function instance(
   mat: THREE.Material,
   matrices: THREE.Matrix4[],
   root: THREE.Group,
+  disposables: { dispose(): void }[],
   chunkSize = 700,
 ): void {
   if (!matrices.length) return;
@@ -113,6 +114,9 @@ function instance(
     inst.castShadow = true;
     inst.receiveShadow = true;
     inst.computeBoundingSphere();
+    // InstancedMesh owns a GPU-side instance buffer that neither the shared
+    // geometry nor the material dispose — it needs its own dispose() call.
+    disposables.push({ dispose: () => inst.dispose() });
     root.add(inst);
   }
 }
@@ -125,12 +129,14 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(track, i, side, offset, lift);
 
-  // The road and its aprons are open ribbons: single-sided, they vanish when
-  // seen from below — on hillsides the circuit appeared to float with sky
-  // showing through the gap. DoubleSide closes those views.
+  // Bleached Nordschleife tarmac (#6B6C68 per the art-direction table). The
+  // ribbons are open/single-sided; seen from below on a hillside they used to
+  // vanish with sky showing through — DoubleSide (below) closes those views.
+  const asphaltTex = asphaltTexture();
+  disposables.push(asphaltTex);
   const asphaltMat = new THREE.MeshStandardMaterial({
-    map: asphaltTexture(),
-    color: 0x6a6a6e,
+    map: asphaltTex,
+    color: 0x6b6c68,
     roughness: 0.94,
     side: THREE.DoubleSide,
   });
@@ -157,7 +163,7 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   road.renderOrder = 1;
   root.add(road);
 
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xe8e8e8, transparent: true, opacity: 0.72 });
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xe8e6e0, transparent: true, opacity: 0.72 });
   disposables.push(lineMat);
   for (const side of [1, -1]) {
     const line = rib((i) => edge(i, side, -0.32, 0.02), (i) => edge(i, side, -0.12, 0.02), lineMat, 0.05);
@@ -185,11 +191,15 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(approach, i, side, offset, lift);
 
-  // DoubleSide for the same reason as the circuit's ribbons: the approach
-  // drops towards the yard and would otherwise show sky through its underside.
+  // Fresher village tarmac (#3A3B3D "Asphalt neu"), lifted slightly so it
+  // does not read as wet. DoubleSide for the same reason as the circuit's
+  // ribbons above: the approach drops towards the yard and would otherwise
+  // show sky through its underside.
+  const approachTex = asphaltTexture();
+  disposables.push(approachTex);
   const asphaltMat = new THREE.MeshStandardMaterial({
-    map: asphaltTexture(),
-    color: 0x5d5f64,
+    map: approachTex,
+    color: 0x46474a,
     roughness: 0.95,
     side: THREE.DoubleSide,
   });
@@ -235,7 +245,7 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
     dummy.updateMatrix();
     dashes.push(dummy.matrix.clone());
   }
-  instance(dashGeo, dashMat, dashes, root);
+  instance(dashGeo, dashMat, dashes, root, disposables);
 
   buildVillage(approach, root, disposables);
   buildHomeBase(approach, root, disposables);
@@ -309,9 +319,9 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
     }
   }
 
-  wallMats.forEach((m, i) => instance(wallGeo, m, walls[i], root));
-  instance(roofGeo, roofMat, roofs, root);
-  instance(hedgeGeo, hedgeMat, hedges, root);
+  wallMats.forEach((m, i) => instance(wallGeo, m, walls[i], root, disposables));
+  instance(roofGeo, roofMat, roofs, root, disposables);
+  instance(hedgeGeo, hedgeMat, hedges, root, disposables);
 
   // Roadside trees for the open stretch.
   const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 3, 5);
@@ -338,8 +348,8 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
       crowns.push(dummy.matrix.clone());
     }
   }
-  instance(trunkGeo, trunkMat, trunks, root);
-  instance(crownGeo, crownMat, crowns, root);
+  instance(trunkGeo, trunkMat, trunks, root, disposables);
+  instance(crownGeo, crownMat, crowns, root, disposables);
 }
 
 // =====================================================================
@@ -519,8 +529,8 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
 function buildKerbs(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
   const n = track.count;
   const geo = new THREE.BoxGeometry(1, 0.12, 1);
-  const redMat = new THREE.MeshStandardMaterial({ color: 0xc02828, roughness: 0.85 });
-  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xe6e6e6, roughness: 0.85 });
+  const redMat = new THREE.MeshStandardMaterial({ color: 0xa62a22, roughness: 0.85 });
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.85 });
   disposables.push(geo, redMat, whiteMat);
 
   const red: THREE.Matrix4[] = [];
@@ -551,8 +561,8 @@ function buildKerbs(track: Track, root: THREE.Group, disposables: { dispose(): v
     }
   }
 
-  instance(geo, redMat, red, root);
-  instance(geo, whiteMat, white, root);
+  instance(geo, redMat, red, root, disposables);
+  instance(geo, whiteMat, white, root, disposables);
 }
 
 function buildBarriers(
@@ -566,7 +576,8 @@ function buildBarriers(
   // Long enough to reach the falling ground beside the road — short posts left
   // the rail visibly floating wherever the verge dropped away.
   const postGeo = new THREE.BoxGeometry(0.14, 1.9, 0.14);
-  const railMat = new THREE.MeshStandardMaterial({ color: 0xb9bec4, roughness: 0.5, metalness: 0.65 });
+  // #8E9296 per the art-direction table.
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x8e9296, roughness: 0.5, metalness: 0.65 });
   const postMat = new THREE.MeshStandardMaterial({ color: 0x8b9096, roughness: 0.7, metalness: 0.4 });
   disposables.push(railGeo, postGeo, railMat, postMat);
 
@@ -609,8 +620,8 @@ function buildBarriers(
     }
   }
 
-  instance(railGeo, railMat, rails, root);
-  instance(postGeo, postMat, posts, root);
+  instance(railGeo, railMat, rails, root, disposables);
+  instance(postGeo, postMat, posts, root, disposables);
 }
 
 function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
@@ -618,7 +629,7 @@ function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): v
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 3.2, 5);
   const crownGeo = new THREE.ConeGeometry(2.1, 8.5, 6);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1 });
-  const crownMat = new THREE.MeshStandardMaterial({ color: 0x2f5228, roughness: 1 });
+  const crownMat = new THREE.MeshStandardMaterial({ color: 0x3f5a2e, roughness: 1 });
   disposables.push(trunkGeo, crownGeo, trunkMat, crownMat);
 
   const trunks: THREE.Matrix4[] = [];
@@ -659,19 +670,52 @@ function buildTrees(track: Track, root: THREE.Group, disposables: { dispose(): v
     }
   }
 
-  instance(trunkGeo, trunkMat, trunks, root);
-  instance(crownGeo, crownMat, crowns, root);
+  instance(trunkGeo, trunkMat, trunks, root, disposables);
+  instance(crownGeo, crownMat, crowns, root, disposables);
 }
 
 function buildDistanceMarkers(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
   const poleGeo = new THREE.BoxGeometry(0.12, 2.4, 0.12);
-  const signGeo = new THREE.BoxGeometry(1.1, 0.7, 0.06);
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 });
-  disposables.push(poleGeo, signGeo, poleMat);
+  disposables.push(poleGeo, poleMat);
 
   const poles: THREE.Matrix4[] = [];
   const dummy = new THREE.Object3D();
   const marks = Math.floor(track.lapLength / 500);
+
+  // One shared atlas + one merged quad mesh for every sign face. The old
+  // version gave each of the 41 signs its own 512x256 texture and draw call
+  // (~29 MB of VRAM and 41 draw calls for roadside furniture).
+  const COLS = 7;
+  const rows = Math.ceil(marks / COLS);
+  const TILE_W = 128;
+  const TILE_H = 64;
+  const atlas = document.createElement('canvas');
+  atlas.width = COLS * TILE_W;
+  atlas.height = rows * TILE_H;
+  const ctx = atlas.getContext('2d')!;
+  ctx.fillStyle = '#14181d';
+  ctx.fillRect(0, 0, atlas.width, atlas.height);
+  ctx.fillStyle = '#e8e6e0';
+  ctx.font = 'bold 30px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let m = 1; m <= marks; m++) {
+    const col = (m - 1) % COLS;
+    const row = Math.floor((m - 1) / COLS);
+    ctx.fillText(`${((m * 500) / 1000).toFixed(1)} km`, col * TILE_W + TILE_W / 2, row * TILE_H + TILE_H / 2 + 2);
+  }
+  const atlasTex = new THREE.CanvasTexture(atlas);
+  atlasTex.anisotropy = 4;
+  const signMat = new THREE.MeshBasicMaterial({ map: atlasTex });
+  disposables.push(atlasTex, signMat);
+
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const right = new THREE.Vector3();
+  const HALF_W = 0.55;
+  const HALF_H = 0.35;
 
   for (let m = 1; m <= marks; m++) {
     const targetS = m * 500;
@@ -692,15 +736,39 @@ function buildDistanceMarkers(track: Track, root: THREE.Group, disposables: { di
     dummy.updateMatrix();
     poles.push(dummy.matrix.clone());
 
-    const signMat = textMaterial(`${(targetS / 1000).toFixed(1)} km`);
-    const sign = new THREE.Mesh(signGeo, signMat);
-    sign.position.set(pos.x, pos.y + 2.3, pos.z);
-    sign.rotation.set(0, yaw + Math.PI / 2, 0);
-    root.add(sign);
-    disposables.push(signMat.map!, signMat);
+    // The sign face, merged into the shared atlas quad mesh.
+    right.set(Math.cos(yaw + Math.PI / 2), 0, -Math.sin(yaw + Math.PI / 2)).multiplyScalar(-1);
+    const cx = pos.x;
+    const cy = pos.y + 2.3;
+    const cz = pos.z;
+    const base = positions.length / 3;
+    positions.push(
+      cx - right.x * HALF_W, cy - HALF_H, cz - right.z * HALF_W,
+      cx + right.x * HALF_W, cy - HALF_H, cz + right.z * HALF_W,
+      cx + right.x * HALF_W, cy + HALF_H, cz + right.z * HALF_W,
+      cx - right.x * HALF_W, cy + HALF_H, cz - right.z * HALF_W,
+    );
+    const col = (m - 1) % COLS;
+    const row = Math.floor((m - 1) / COLS);
+    const u0 = col / COLS;
+    const u1 = (col + 1) / COLS;
+    // Canvas rows count downward; UV v counts upward.
+    const v1 = 1 - row / rows;
+    const v0 = 1 - (row + 1) / rows;
+    uvs.push(u0, v0, u1, v0, u1, v1, u0, v1);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 
-  instance(poleGeo, poleMat, poles, root);
+  const signGeo = new THREE.BufferGeometry();
+  signGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  signGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  signGeo.setIndex(indices);
+  disposables.push(signGeo);
+  const signs = new THREE.Mesh(signGeo, signMat);
+  signs.matrixAutoUpdate = false;
+  root.add(signs);
+
+  instance(poleGeo, poleMat, poles, root, disposables);
 }
 
 function buildStartLine(track: Track, root: THREE.Group, disposables: { dispose(): void }[]): void {
@@ -821,8 +889,8 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
     dummy.updateMatrix();
     merlons.push(dummy.matrix.clone());
   }
-  instance(wallGeo, stoneMat, wallMatrices, group);
-  instance(merlonGeo, stoneMat, merlons, group);
+  instance(wallGeo, stoneMat, wallMatrices, group, disposables);
+  instance(merlonGeo, stoneMat, merlons, group, disposables);
 
   // The bergfried: the tall round keep that makes the silhouette.
   const keepGeo = new THREE.CylinderGeometry(6.4, 7.4, 26, 14);
@@ -895,8 +963,8 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
     dummy.updateMatrix();
     crowns.push(dummy.matrix.clone());
   }
-  instance(trunkGeo, trunkMat, trunks, group);
-  instance(crownGeo, crownMat, crowns, group);
+  instance(trunkGeo, trunkMat, trunks, group, disposables);
+  instance(crownGeo, crownMat, crowns, group, disposables);
 
   root.add(group);
 }
@@ -1065,9 +1133,9 @@ export function buildSky(disposables: { dispose(): void }[]): THREE.Mesh {
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      top: { value: new THREE.Color(0x7fa8d4) },
-      middle: { value: new THREE.Color(0xc3d2de) },
-      bottom: { value: new THREE.Color(0xd8dcda) },
+      top: { value: new THREE.Color(0x8aa6c2) },
+      middle: { value: new THREE.Color(0xa9b4ae) },
+      bottom: { value: new THREE.Color(0xb4bcb2) },
     },
     vertexShader: /* glsl */ `
       varying vec3 vPos;

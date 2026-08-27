@@ -19,7 +19,10 @@ function generateCode(carId: string, percent: number): string {
   let block = '';
   for (let i = 0; i < 4; i++) block += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
   const prefix = carId.replace(/[^a-z0-9]/gi, '').slice(0, 3).toUpperCase();
-  const pct = String(percent).replace('.', '');
+  // Percent in fixed tenths, three digits: 10% -> 100, 7.5% -> 075, 5% -> 050.
+  // The old free-form encoding made 7.5% read as "NORD75", indistinguishable
+  // from a hypothetical 75 — a backend could never parse that safely.
+  const pct = String(Math.round(percent * 10)).padStart(3, '0');
   return `NORD${pct}-${prefix}-${block}`;
 }
 

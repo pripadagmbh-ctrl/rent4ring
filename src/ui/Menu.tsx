@@ -9,6 +9,14 @@ interface Props {
   carLabel: string;
 }
 
+// Derived once from the survey data itself, so the copy can never drift from
+// the tiles below it (which already read the same source).
+const LAP_KM = (trackData.lapLength / 1000).toFixed(1);
+const SECTION_COUNT = trackData.sections.length;
+const ELEVATION_M = Math.round(
+  Math.max(...trackData.points.map((p) => p.y)) - Math.min(...trackData.points.map((p) => p.y)),
+);
+
 export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
   return (
     <div className="screen menu">
@@ -20,8 +28,8 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
 
         <p className="menu__lead">
           From Burgstrasse 1 in Nurburg up into the Green Hell. The circuit is rebuilt metre by metre from real
-          survey data — 20.7 km, 43 named sections, 297 metres of elevation, the Karussell, and the Nurburg
-          castle looking down on the lot of it.
+          survey data — {LAP_KM} km, {SECTION_COUNT} named sections, {ELEVATION_M} metres of elevation, the
+          Karussell, and the Nurburg castle looking down on the lot of it.
         </p>
 
         <div className="menu__actions">
@@ -43,7 +51,7 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
             <span>named sections</span>
           </div>
           <div className="fact">
-            <b>297</b>
+            <b>{ELEVATION_M}</b>
             <span>m elevation</span>
           </div>
           <div className="fact">

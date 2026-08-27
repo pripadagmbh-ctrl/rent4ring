@@ -400,6 +400,9 @@ export class GarageScene {
     this.running = false;
     cancelAnimationFrame(this.frame);
     if (GarageScene.active === this) GarageScene.active = null;
+    if (import.meta.env.DEV && (window as unknown as { __garage?: GarageScene }).__garage === this) {
+      delete (window as unknown as { __garage?: GarageScene }).__garage;
+    }
     this.carMesh?.dispose();
     for (const d of this.disposables) d.dispose();
     this.renderer.dispose();
