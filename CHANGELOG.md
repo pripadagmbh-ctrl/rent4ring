@@ -54,6 +54,16 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Geändert
 
+- **Herr Müller sitzt selbst auf der Panigale.** Der Fahrer war bisher ein
+  anonymer Rennfahrer in der Lehrbuch-Hocke — korrekt und niemand. Jetzt ist es
+  er: Gorillabau mit Schultern, die kein Mensch hat, in einem Lederkombi, der
+  vor Jahren aufgehört hat zu passen. Am Kragen, an den Bündchen, an den
+  Fußgelenken und in der Taille quillt das Fell heraus, wo das Leder schlicht
+  ausgeht; die überdehnten Partien sind heller und glänzender als der Rest,
+  weil echtes Leder über einer Spannung ausbleicht. Offener Helm, weil über
+  diesen Kopf keiner geht — deshalb erkennt man ihn auch. Und er kann sich
+  nicht ducken: er sitzt aufrecht, Knie nach außen. Das Motorrad hat die
+  richtige Größe, der Mann nicht.
 - **Reifenspuren auf der Strecke.** Wo die Reifen loslassen, bleibt Gummi
   liegen — gesteuert von derselben Grip-Zahl wie das Quietschen, damit Bild und
   Ton nie etwas Unterschiedliches behaupten. Als ein vorab angelegter
