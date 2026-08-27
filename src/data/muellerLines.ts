@@ -306,6 +306,58 @@ const LINES: Record<string, CarLines> = {
       },
     ],
   },
+  // His own bike, and the only thing in the yard he rides himself. So he is
+  // not selling it to you — he is talking himself into it, and the customer
+  // he lectures is the one in the mirror.
+  'ducati-panigale-v4': {
+    garage: [
+      {
+        text: 'Ah. No. This one is not for hire. This one is mine, and I am taking it out myself. You may watch.',
+        mood: 'cheer',
+        gesture: 'present',
+      },
+      {
+        text: 'Two hundred and sixteen horsepower against a hundred and ninety-five kilos. I have done the sum. I keep doing the sum.',
+        mood: 'happy',
+        gesture: 'point',
+      },
+      {
+        text: 'My wife asks why I need it. I tell her it is inventory. It has been inventory for four years.',
+        mood: 'idle',
+      },
+      {
+        text: 'Helmet, gloves, back protector. I lecture everyone about this and then I am the one who forgets the earplugs.',
+        mood: 'idle',
+        gesture: 'point',
+      },
+      {
+        text: 'No roof, no cage, no wing to hide behind. Just me and a great deal of poor judgement.',
+        mood: 'happy',
+        gesture: 'thumb',
+      },
+      {
+        text: 'The dog knows that sound. Look at him. He knows exactly what I am about to do.',
+        mood: 'cheer',
+      },
+    ],
+    farewell: [
+      {
+        text: 'Right, Müller. Gently out of the yard, warm the tyres, and no heroics before Hatzenbach. …He never listens.',
+        mood: 'happy',
+        gesture: 'wave',
+      },
+      {
+        text: 'Twenty-six years telling people to take it easy. Watch me ignore every word of it.',
+        mood: 'cheer',
+        gesture: 'wave',
+      },
+      {
+        text: 'If I bin it, I have nobody to shout at. That is the one flaw in the arrangement.',
+        mood: 'happy',
+        gesture: 'wave',
+      },
+    ],
+  },
 };
 
 /** Used if a car ever turns up without its own script. */

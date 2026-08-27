@@ -6,6 +6,7 @@ import { formatLap } from './format';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
+import CardReader from './CardReader';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -56,6 +57,8 @@ export default function Garage({
   // car on the turntable, then sees the driver off.
   const [lineIndex, setLineIndex] = useState(0);
   const [farewell, setFarewell] = useState<MuellerLine | null>(null);
+  /** The deposit swipe, shown over the garage on the way out. */
+  const [swiping, setSwiping] = useState(false);
   const leaveTimer = useRef<number | null>(null);
 
   const lines = garageLines(selected.id);
@@ -88,6 +91,14 @@ export default function Garage({
   const headOut = useCallback(() => {
     // Guard the double tap: the send-off must not restart, and the drive must
     // not be queued twice.
+    if (leaveTimer.current !== null || swiping) return;
+    // Nobody leaves this yard before the deposit is on the card.
+    setSwiping(true);
+  }, [swiping]);
+
+  /** Deposit authorised — now he says his piece and the car rolls out. */
+  const depositTaken = useCallback(() => {
+    setSwiping(false);
     if (leaveTimer.current !== null) return;
     const line = farewellLine(selected.id);
     setFarewell(line);
@@ -123,6 +134,20 @@ export default function Garage({
 
   return (
     <div className="screen garage">
+      {/* Deposit first. He is very clear about this. */}
+      {swiping && (
+        <div className="overlay">
+          <div className="dialog swipe-dialog">
+            <h2>Card, please</h2>
+            <p>
+              Two and a half thousand on hold against the {selected.brand} {selected.model}. Herr
+              Müller does this bit himself, and he does it slowly, while looking at you.
+            </p>
+            <CardReader mode="auth" onDone={depositTaken} />
+          </div>
+        </div>
+      )}
+
       <header className="garage__head">
         <button className="brand brand--button" onClick={onBack} aria-label="Back to the main menu">
           <Logo width={190} />
@@ -280,9 +305,9 @@ export default function Garage({
           <button
             className="btn-primary btn-primary--block"
             onClick={headOut}
-            disabled={farewell !== null}
+            disabled={farewell !== null || swiping}
           >
-            {farewell ? 'Rolling out…' : 'Head out'}
+            {swiping ? 'Taking the deposit…' : farewell ? 'Rolling out…' : 'Head out'}
           </button>
         </div>
       </div>
