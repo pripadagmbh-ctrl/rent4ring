@@ -58,7 +58,7 @@ als „Fix hat nicht gewirkt" missverstanden wird.
 
 ---
 
-## O4 — Wendehammer und Verbindungsfahrbahn überlappen die Rückführung der Burgstraße
+## O4 — Wendehammer und Verbindungsfahrbahn überlappten die Burgstraße (behoben)
 
 Beim Eindrehen des Areals (TWIST in `src/game/departure.ts`) vermessen: Das
 Grundstück liegt in einer Haarnadel, die Straße läuft auf der einen Seite hinaus
@@ -70,10 +70,48 @@ auf **2,13 m** verbessert, aber nicht behoben; mehr ging nicht, weil die
 straßenseitige Hallenwand nur 4,10 m von der Mittellinie des hinausführenden
 Astes entfernt steht und ab etwa 2° selbst in die Fahrbahn wandert.
 
-**Warum nicht umgesetzt:** Nicht beauftragt, und die saubere Lösung ist keine
-Drehung, sondern ein neuer Zuschnitt — Wendehammer schmaler oder weiter nach
-Osten, was die U-Turn-Choreografie und die Flotten-Stellplätze mit betrifft.
+**Behoben** durch den neuen Zuschnitt: `PLATEAU.maxZ` von 24 auf 23, und `LINK`
+in zwei Teile zerlegt — die Einmündung behält ihre breite Mündung
+(x −9,5…6, z bis 25), der östliche Teil `LINK_EAST` (x 6…20) endet bei z 23.
+Eine einzelne Rechteckfläche hätte auf den schlechtesten Fall zugeschnitten
+werden müssen und dabei die Mündung mit weggenommen.
 
-**Relevanz:** Kosmetisch bis mittel. Sichtbar nur, wenn man von der Strecke aus
-zum Hof zurückschaut; die Fahrlinie selbst berührt die Stelle nie.
+Gemessen gegen die Fahrbahnmitte, Fahrbahnrand bei 3,1 m:
 
+| Fläche | vorher | nachher | Bankett |
+|---|---|---|---|
+| PLATEAU | 2,99 m | 3,99 m | 0,89 m |
+| LINK (Mündung) | — | 4,17 m | 1,07 m |
+| LINK_EAST | 2,13 m | 4,62 m | 1,52 m |
+
+Fahrlinie geprüft: alle vier Fahrzeugecken liegen an 69 Stützpunkten der
+Ausfahrt auf Teer (Hofflächen oder Burgstraße), die Kehre eingeschlossen.
+
+---
+
+## O5 — Zielrundenzeiten lassen sich nicht seriös nachziehen, solange der Auto-Fahrer nicht sauber fährt
+
+Nach dem Lenkungs-Fix schlägt der Auto-Fahrer aus `simulate.ts` die
+Zielrundenzeiten um 39 bis 100 Sekunden — was zunächst wie zu leicht gesetzte
+Ziele aussieht. Der Wert taugt aber nicht als Maßstab: derselbe Lauf meldet
+**20 bis 53 Prozent Zeit abseits der Strecke** und **111 bis 348
+Leitplankenkontakte** pro Runde, `latMax` liegt bei allen acht Fahrzeugen exakt
+auf 12,5 m — das ist die Barriere (`halfWidth + 6,5`). Der Follower fährt also
+keine Runde, er prallt eine Runde lang die Leitplanken entlang und schneidet
+dabei ab. Seine Zeiten sind zu schnell, weil er schummelt, nicht weil die Ziele
+zu weich sind.
+
+**Versucht und verworfen:** Recentre-Verstärkung von 0,14 auf 0,5, Eingriff ab
+55 statt 85 Prozent der halben Fahrbahnbreite, Apex-Offset zurückgenommen,
+Kurventempo-Sicherheitsfaktor von 0,94 auf 0,86. Ergebnis war deutlich
+schlechter — der P-Anteil kämpft gegen die Ideallinie, die Kontakte stiegen bei
+den schnellen Autos (GT3 RS 159 → 304), und die Ducati kam gar nicht mehr
+durch (DNF). Rückgängig gemacht.
+
+**Was es wirklich bräuchte:** eine vorab berechnete Ideallinie mit daraus
+abgeleitetem Geschwindigkeitsprofil statt eines Apex-Offsets pro Frame. Das ist
+ein eigenes Stück Arbeit am Werkzeug, kein Tuning-Wert.
+
+**Relevanz:** Blockiert jede belastbare Aussage über den Schwierigkeitsgrad.
+Die Zielzeiten stehen bewusst unverändert — sie auf Basis dieser Messung
+nachzuziehen wäre geraten, nicht gemessen.

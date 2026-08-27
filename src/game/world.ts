@@ -5,6 +5,7 @@ import {
   DIP,
   FLEET_APRON,
   LINK,
+  LINK_EAST,
   OPEN_DOOR,
   PLATEAU,
   RAMP,
@@ -589,7 +590,11 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
   // level, but the ground falls away from the road — so both are built as thick
   // pads whose sides read as retaining walls rather than as floating tarmac.
   slab(tarmacMat, PLATEAU.minX, PLATEAU.maxX, PLATEAU.minZ, PLATEAU.maxZ, ROAD_Y, 4);
+  // Two pieces, not one: the mouth at the junction stays wide, the run east of
+  // it is held back from the Burgstraße's returning leg. The step between them
+  // reads as the lane narrowing once it is clear of the junction.
   slab(tarmacMat, LINK.minX, LINK.maxX, LINK.minZ, LINK.maxZ, ROAD_Y, 4);
+  slab(tarmacMat, LINK_EAST.minX, LINK_EAST.maxX, LINK_EAST.minZ, LINK_EAST.maxZ, ROAD_Y, 4);
 
   // Retaining walls holding back the higher ground around the dip: along the
   // road side, across the back, and up to where the ramp breaks through.
