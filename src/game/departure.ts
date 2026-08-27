@@ -49,10 +49,27 @@ export const CLOSED_DOOR_X = -4.4;
 export const YARD = { minX: -13, maxX: 11, minZ: -7, maxZ: 14 };
 /** The climb from the yard up to street level, driven in +x. */
 export const RAMP = { fromX: 11, toX: 19, minZ: 7, maxZ: 16 };
+/**
+ * The north edge of everything at street level is set by the Burgstraße's
+ * *returning* leg, which runs east across the top of the site: in local
+ * coordinates its centreline drops from z ≈ 29.7 at x = 1 to z ≈ 24.7 at
+ * x = 49, so its near kerb sits at roughly `26.6 - 0.103·x`. Both the turning
+ * head and the eastern half of the link lane used to run straight through it —
+ * 2,99 m and 2,13 m from the centreline against a 3,1 m half-width, i.e. tarmac
+ * laid over a live carriageway. The edges below are cut to clear it.
+ */
+
 /** Street-level turning head where the U-turn happens. */
-export const PLATEAU = { minX: 19, maxX: 26, minZ: 8, maxZ: 24 };
-/** Street-level lane running back from the turning head to the junction. */
-export const LINK = { minX: -9.5, maxX: 20, minZ: 17.5, maxZ: 25.5 };
+export const PLATEAU = { minX: 19, maxX: 26, minZ: 8, maxZ: 23 };
+/**
+ * Street-level lane back from the turning head to the junction, in two pieces.
+ * One rectangle cannot do both jobs: the junction end needs a wide mouth to
+ * meet the road, and the far end has to duck under the returning leg. Cut to
+ * the worst case, a single rectangle would have thrown away the mouth.
+ */
+export const LINK = { minX: -9.5, maxX: 6, minZ: 17.5, maxZ: 25 };
+/** The narrower run east of the mouth, held back from the returning leg. */
+export const LINK_EAST = { minX: 6, maxX: 20, minZ: 17.5, maxZ: 23 };
 
 /**
  * Where the rest of the fleet is parked: a yard-level apron along the south
@@ -151,8 +168,13 @@ export interface HomeBaseFrame {
  * parked fleet, the crowd, the camera — swings behind it.
  */
 const TWIST = 0.03;
-/** Where the link lane meets the road, in local coordinates. */
-const TWIST_PIVOT = { x: LINK.minX, z: (LINK.minZ + LINK.maxZ) / 2 };
+/**
+ * Where the link lane meets the road, in local coordinates. Written out rather
+ * than taken from the middle of `LINK`: this is a fixed point on the ground,
+ * and deriving it would have quietly moved the whole site the next time the
+ * lane's edges were re-cut.
+ */
+const TWIST_PIVOT = { x: LINK.minX, z: 21.5 };
 
 /**
  * Where the yard sits in the world. Anchored to the very start of the approach

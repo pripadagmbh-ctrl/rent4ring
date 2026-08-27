@@ -22,6 +22,14 @@ export class EngineAudio {
     chatter: OscillatorNode;
     chatterDepth: GainNode;
   } | null = null;
+  /** Armco scrape: noise through a moving band, held open while in contact. */
+  private scraping: {
+    source: AudioBufferSourceNode;
+    band: BiquadFilterNode;
+    gain: GainNode;
+    flutter: OscillatorNode;
+    flutterDepth: GainNode;
+  } | null = null;
   private started = false;
   private disposed = false;
   /** Engine damp — set for pause AND user mute. */
@@ -182,6 +190,36 @@ export class EngineAudio {
       chatterDepth,
     };
 
+    // ------------------------------------------------------ Armco scrape
+    // Steel on steel is broad and bright, not a resonant howl, so this runs a
+    // much wider band than the tyres and sits higher. `flutter` breaks it up:
+    // a barrier is bolted together in sections and the car catches on each one.
+    const scrapeSource = makeNoise();
+    const scrapeBand = ctx.createBiquadFilter();
+    scrapeBand.type = 'bandpass';
+    scrapeBand.frequency.value = 1500;
+    scrapeBand.Q.value = 0.9;
+    const scrapeGain = ctx.createGain();
+    scrapeGain.gain.value = 0;
+    scrapeSource.connect(scrapeBand).connect(scrapeGain).connect(master);
+    scrapeSource.start();
+
+    const flutter = ctx.createOscillator();
+    flutter.type = 'sawtooth';
+    flutter.frequency.value = 34;
+    const flutterDepth = ctx.createGain();
+    flutterDepth.gain.value = 0;
+    flutter.connect(flutterDepth).connect(scrapeGain.gain);
+    flutter.start();
+
+    this.scraping = {
+      source: scrapeSource,
+      band: scrapeBand,
+      gain: scrapeGain,
+      flutter,
+      flutterDepth,
+    };
+
     // A drive started while muted must stay muted (H7).
     master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : 0.35, ctx.currentTime + 0.4);
   }
@@ -292,25 +330,113 @@ export class EngineAudio {
     osc.stop(now + 0.14);
   }
 
-  /** Impact thud when the car finds the Armco. */
+  /**
+   * The car finding the Armco. Three layers, because a crash is three things
+   * arriving at once and a single swept tone is none of them:
+   *
+   *  · the **thud** — the mass of the car stopping. Low, short, and the only
+   *    part a gentle brush against the barrier produces.
+   *  · the **crunch** — sheet metal folding. A burst of noise through a band
+   *    that sweeps downwards, which is what gives the hit its weight.
+   *  · the **debris** — glass and plastic leaving the car, as a scatter of
+   *    short high blips at random pitches. Only above half strength: a light
+   *    tap that sprays glass sounds absurd, and hearing it is the cue that
+   *    this one was expensive.
+   *
+   * @param strength 0–1, closing speed into the barrier over 18 m/s
+   */
   impact(strength: number): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || this.muted) return;
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(120, now);
-    osc.frequency.exponentialRampToValueAtTime(35, now + 0.25);
-    gain.gain.setValueAtTime(Math.min(0.4, strength * 0.4), now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
-    osc.connect(gain).connect(this.master);
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
+    const hit = clamp01(strength);
+    const master = this.master;
+
+    /** Frees a one-shot's nodes once it has finished sounding. */
+    const retire = (node: AudioScheduledSourceNode, ...rest: AudioNode[]) => {
+      node.onended = () => {
+        node.disconnect();
+        for (const n of rest) n.disconnect();
+      };
     };
-    osc.start(now);
-    osc.stop(now + 0.32);
+
+    // --- the thud -------------------------------------------------------
+    const thud = ctx.createOscillator();
+    const thudGain = ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(150, now);
+    thud.frequency.exponentialRampToValueAtTime(32, now + 0.22);
+    thudGain.gain.setValueAtTime(0.02 + hit * 0.5, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    thud.connect(thudGain).connect(master);
+    retire(thud, thudGain);
+    thud.start(now);
+    thud.stop(now + 0.32);
+
+    // --- the crunch -----------------------------------------------------
+    // Short enough to read as one event: past about 250 ms a noise burst stops
+    // sounding like an impact and starts sounding like a passing lorry.
+    const crunchLen = 0.16 + hit * 0.12;
+    const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * crunchLen), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+    const crunch = ctx.createBufferSource();
+    crunch.buffer = buffer;
+    const crunchBand = ctx.createBiquadFilter();
+    crunchBand.type = 'bandpass';
+    crunchBand.Q.value = 1.1;
+    crunchBand.frequency.setValueAtTime(900 + hit * 1500, now);
+    crunchBand.frequency.exponentialRampToValueAtTime(260, now + crunchLen);
+    const crunchGain = ctx.createGain();
+    // Near-instant attack. Ramping in over even 20 ms turns a hit into a whoosh.
+    crunchGain.gain.setValueAtTime(0.0001, now);
+    crunchGain.gain.exponentialRampToValueAtTime(0.03 + hit * 0.6, now + 0.006);
+    crunchGain.gain.exponentialRampToValueAtTime(0.0001, now + crunchLen);
+    crunch.connect(crunchBand).connect(crunchGain).connect(master);
+    retire(crunch, crunchBand, crunchGain);
+    crunch.start(now);
+
+    // --- the debris -----------------------------------------------------
+    if (hit > 0.5) {
+      const shards = Math.round(4 + hit * 8);
+      for (let i = 0; i < shards; i++) {
+        const t = now + 0.02 + Math.random() * (0.1 + hit * 0.28);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = 2200 + Math.random() * 3600;
+        const peak = (0.02 + hit * 0.05) * (0.4 + Math.random() * 0.6);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05 + Math.random() * 0.07);
+        osc.connect(gain).connect(master);
+        retire(osc, gain);
+        osc.start(t);
+        osc.stop(t + 0.14);
+      }
+    }
+  }
+
+  /**
+   * The car grinding along the barrier, fed every frame for as long as it is
+   * touching. Separate from `impact` on purpose: the hit is one event, but
+   * sliding down forty metres of Armco is a sound that has to last as long as
+   * the slide does, and before this the whole slide after the first thud was
+   * silent.
+   *
+   * @param intensity 0 when the car is clear of the barrier, otherwise how
+   *                  fast it is dragging along it
+   */
+  scrape(intensity: number): void {
+    const s = this.scraping;
+    if (!this.ctx || !s) return;
+    const now = this.ctx.currentTime;
+    const k = clamp01(intensity);
+    // Fast up, slower down: contact starts abruptly and the sound should too,
+    // but cutting it dead the instant the car comes off the barrier clicks.
+    s.gain.gain.setTargetAtTime(k * 0.34, now, k > 0.01 ? 0.02 : 0.08);
+    s.band.frequency.setTargetAtTime(1500 + k * 2200, now, 0.05);
+    s.flutterDepth.gain.setTargetAtTime(k * 0.2, now, 0.05);
   }
 
   /**
@@ -386,6 +512,20 @@ export class EngineAudio {
         node.disconnect();
       }
       this.squeal = null;
+    }
+    if (this.scraping) {
+      const { source, band, gain, flutter, flutterDepth } = this.scraping;
+      for (const node of [source, flutter]) {
+        try {
+          node.stop();
+        } catch {
+          /* already stopped */
+        }
+      }
+      for (const node of [source, band, gain, flutter, flutterDepth]) {
+        node.disconnect();
+      }
+      this.scraping = null;
     }
     // The context is shared across drives and must survive this one: closing
     // it would silence every later drive, and on iOS it cannot be unlocked
