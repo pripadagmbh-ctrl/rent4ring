@@ -83,6 +83,11 @@ export default function BanScene({ car, onDone }: Props) {
 
       <div className="banscene__yard" aria-hidden="true" />
 
+      {/* The shed they walk back into at the end. */}
+      <div className="banscene__shed" aria-hidden="true">
+        <span className="banscene__door" />
+      </div>
+
       {/* The recovery truck, reversing in with the wreck on the deck. */}
       <div className="banscene__truck">
         <div className="banscene__deck" />
@@ -97,7 +102,17 @@ export default function BanScene({ car, onDone }: Props) {
       <div className="banscene__mueller">
         <Gorilla mood="angry" gesture={current.stage === 'treat' ? 'thumb' : 'point'} />
       </div>
-      <div className="banscene__customer" />
+      {/* The customer, as a figure rather than a shape — a blob being punted
+          reads as a bin bag, and the joke needs a person. */}
+      <div className="banscene__customer" aria-hidden="true">
+        <span className="banscene__customer-head" />
+        <span className="banscene__customer-body" />
+        <span className="banscene__customer-leg banscene__customer-leg--l" />
+        <span className="banscene__customer-leg banscene__customer-leg--r" />
+        <span className="banscene__customer-arm" />
+      </div>
+      {/* Sells the punt: a streak where he went. */}
+      <div className="banscene__swoosh" aria-hidden="true" />
       <div className="banscene__dog">
         <Barbet />
       </div>
