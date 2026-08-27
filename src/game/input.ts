@@ -9,14 +9,42 @@ export type CameraMode = 'chase' | 'bonnet' | 'cockpit';
 export class InputManager {
   readonly state: DriveInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 
+  private capture = true;
+
   /**
    * While a dialog (pause, ceremony) owns the screen this is false: drive
    * keys are ignored and — crucially — not preventDefault-ed, so Space and
    * Enter reach the dialog's buttons again. Escape stays live to unpause.
+   *
+   * Both transitions drop everything held. A key whose `keyup` the browser
+   * never delivered — swallowed by an OS shortcut, a context menu, a
+   * permission prompt — otherwise stays in the set for the rest of the drive
+   * and steers the car by itself, and there is no event left that would ever
+   * clear it. That is why pausing and unpausing "fixed" the steering: the
+   * dialog was the only thing that touched this flag. Now it is the flag that
+   * does the clearing, so the fix is the rule rather than a lucky side effect.
    */
-  captureEnabled = true;
+  get captureEnabled(): boolean {
+    return this.capture;
+  }
+
+  set captureEnabled(on: boolean) {
+    if (on === this.capture) return;
+    this.capture = on;
+    this.handleBlur();
+    this.reset();
+  }
 
   private keys = new Set<string>();
+  /** When each held key last produced a `keydown`, for the stuck-key watchdog. */
+  private lastSeen = new Map<string, number>();
+  /**
+   * Whether this machine sends auto-repeat at all. The watchdog below leans on
+   * it, and switching it on blind would be far worse than the bug: on a setup
+   * without repeat — some remote desktops, some VMs — it would drop the
+   * throttle a second and a half into every straight.
+   */
+  private sawRepeat = false;
   private steerSmooth = 0;
   private throttleSmooth = 0;
   private brakeSmooth = 0;
@@ -31,11 +59,15 @@ export class InputManager {
 
   private readonly handleDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
-    if (!this.captureEnabled) {
+    if (!this.capture) {
       if (k === 'escape') this.onPause?.();
       return;
     }
     if (CONSUMED.has(k) || CONSUMED.has(e.code)) e.preventDefault();
+    // Before the repeat guard below: a held key keeps arriving as `repeat`
+    // events, and those are what tell the watchdog the key is still down.
+    if (e.repeat) this.sawRepeat = true;
+    this.lastSeen.set(k, performance.now());
     if (this.keys.has(k)) return;
     this.keys.add(k);
     if (k === 'c') this.onCameraToggle?.();
@@ -44,7 +76,9 @@ export class InputManager {
   };
 
   private readonly handleUp = (e: KeyboardEvent) => {
-    this.keys.delete(e.key.toLowerCase());
+    const k = e.key.toLowerCase();
+    this.keys.delete(k);
+    this.lastSeen.delete(k);
   };
 
   /**
@@ -53,6 +87,7 @@ export class InputManager {
    */
   private readonly handleBlur = () => {
     this.keys.clear();
+    this.lastSeen.clear();
     this.touch.throttle = 0;
     this.touch.brake = 0;
     this.touch.steer = 0;
@@ -84,6 +119,29 @@ export class InputManager {
     return names.some((n) => this.keys.has(n));
   }
 
+  /**
+   * Releases keys the browser stopped talking about.
+   *
+   * A `keyup` can go missing — swallowed by an OS shortcut, a context menu, a
+   * permission prompt that steals the key without blurring the window — and
+   * the key then stays down for the rest of the drive with no event left that
+   * would ever clear it. That is the car steering itself.
+   *
+   * A key that is genuinely held keeps sending auto-repeat, so silence for
+   * this long means it is not held any more. Only armed once repeat has
+   * actually been observed, so a machine that does not send it is untouched.
+   */
+  private dropStuckKeys(): void {
+    if (!this.sawRepeat || !this.keys.size) return;
+    const now = performance.now();
+    for (const k of this.keys) {
+      if (now - (this.lastSeen.get(k) ?? now) > STUCK_MS) {
+        this.keys.delete(k);
+        this.lastSeen.delete(k);
+      }
+    }
+  }
+
   private padPauseHeld = false;
 
   update(dt: number): DriveInput {
@@ -92,6 +150,8 @@ export class InputManager {
     // Start/Options on the pad toggles pause, edge-triggered.
     if (pad?.pausePressed && !this.padPauseHeld) this.onPause?.();
     this.padPauseHeld = pad?.pausePressed ?? false;
+
+    this.dropStuckKeys();
 
     let throttleRaw = this.held('w', 'arrowup') ? 1 : 0;
     let brakeRaw = this.held('s', 'arrowdown') ? 1 : 0;
@@ -173,6 +233,14 @@ export class InputManager {
     return parts.join(' · ');
   }
 }
+
+/**
+ * How long a key may go without an auto-repeat before it counts as released.
+ * Windows and macOS both repeat every 30-60 ms once the initial delay is past,
+ * so a second is many missed repeats — long enough never to fire on a real
+ * hold, short enough that a stuck key is a blip rather than the drive.
+ */
+const STUCK_MS = 1000;
 
 const CONSUMED = new Set([
   'arrowup',
