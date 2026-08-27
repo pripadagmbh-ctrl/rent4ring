@@ -101,8 +101,13 @@ function AppInner() {
   const [car, setCar] = useState<Car>(FLEET[5]);
   const [assists, setAssists] = useState(true);
   const [muted, setMuted] = useState(false);
-  /** Herr Müller and Dale out loud, via the browser's own voices. */
-  const [voices, setVoices] = useState(true);
+  /**
+   * Herr Müller and Dale out loud, via the browser's own voices. Off unless
+   * asked for: the voices a browser ships are robotic enough that having them
+   * on by default makes the game worse, not better. The switch stays so the
+   * feature is one tap away once there are real recordings to put behind it.
+   */
+  const [voices, setVoices] = useState(false);
   const [paused, setPaused] = useState(false);
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
   const [lapResult, setLapResult] = useState<LapResult | null>(null);
@@ -322,6 +327,13 @@ function AppInner() {
                     real state turns that into something reportable. */}
                 <br />
                 <small style={{ color: 'var(--muted)' }}>Audio: {audioStatus()}</small>
+                {/* Same reasoning as the audio line: a car that steers itself
+                    cannot be diagnosed from the driver's seat, so the pause
+                    screen says what the game thinks is being pressed. */}
+                <br />
+                <small style={{ color: 'var(--muted)' }}>
+                  Input: {gameRef.current?.input.diagnostic() ?? 'not started'}
+                </small>
               </p>
               <div className="dialog__actions">
                 <button className="btn-primary" onClick={() => setPaused(false)}>

@@ -144,6 +144,34 @@ export class InputManager {
     this.touch.brake = 0;
     this.touch.steer = 0;
   }
+
+  /**
+   * One line describing what the game currently believes is being pressed.
+   * Shown on the pause screen, for the same reason the audio state is: a car
+   * that steers itself is invisible from the driver's seat, and the three
+   * things that cause it — a key the browser never reported as released, a
+   * controller nobody is holding, capture left switched off — all look
+   * identical from outside and are all obvious from here.
+   */
+  diagnostic(): string {
+    const parts: string[] = [];
+    parts.push(this.captureEnabled ? 'keys live' : 'keys OFF (dialog)');
+    parts.push(this.keys.size ? `held: ${[...this.keys].join('+')}` : 'held: none');
+    if (this.touchActive) {
+      parts.push(`touch ${this.touch.steer.toFixed(1)}/${this.touch.throttle.toFixed(1)}`);
+    }
+    const pad = padDiagnostic();
+    if (pad) {
+      parts.push(
+        `pad "${pad.id.slice(0, 28)}" ${pad.mapping || 'non-standard'}` +
+          (pad.mapping === 'standard'
+            ? ` ${pad.engaged ? 'engaged' : 'idle'} axis ${pad.rawSteer.toFixed(2)}→${pad.steer.toFixed(2)}`
+            : ' — ignored'),
+      );
+    }
+    parts.push(`steer ${this.state.steer.toFixed(2)}`);
+    return parts.join(' · ');
+  }
 }
 
 const CONSUMED = new Set([
@@ -163,28 +191,114 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-function readGamepad(): {
+export interface PadReading {
   throttle: number;
   brake: number;
   steer: number;
   handbrake: boolean;
   pausePressed: boolean;
-} | null {
+}
+
+/** Live pad state, for the diagnostic on the pause screen. */
+export interface PadDiagnostic {
+  id: string;
+  mapping: string;
+  /** False while the pad is connected but not yet trusted to drive. */
+  engaged: boolean;
+  /** The resting value that is subtracted from the steering axis. */
+  zero: number;
+  rawSteer: number;
+  steer: number;
+  throttle: number;
+  brake: number;
+}
+
+/**
+ * The resting offset of the steering axis, learned once. Sticks drift, and a
+ * drifting axis used to steer the car all by itself: `update()` lets the pad
+ * override the keyboard whenever its magnitude is the larger of the two, and
+ * with no key pressed the keyboard's is zero.
+ */
+let padZero: number | null = null;
+/**
+ * A pad contributes nothing until it has been moved deliberately once. Same
+ * idea as `touchActive`: a controller sitting on the sofa must not be able to
+ * drive, and neither must a device the browser merely *reports* as a pad.
+ */
+let padEngaged = false;
+let padId = '';
+
+/** Movement that counts as "somebody is actually using this". */
+const PAD_WAKE = 0.35;
+const PAD_DEADZONE = 0.15;
+
+function livePad(): Gamepad | null {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
-  const pads = navigator.getGamepads();
-  // Prefer a pad the browser has normalised to the standard layout — the
-  // button numbers below are only meaningful there. Fall back to the first
-  // connected pad rather than none: better a slightly odd mapping than a
-  // controller that does nothing at all.
-  const pad =
-    [...pads].find((p) => p && p.mapping === 'standard') ?? [...pads].find((p) => p != null) ?? null;
-  if (!pad) return null;
-  const deadzone = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
+  // Standard mapping only. The old code fell back to the first connected
+  // device on the grounds that an odd mapping beats no controller — it does
+  // not: on a non-standard device the indices below are arbitrary, so
+  // buttons[7] can sit at "pressed" and pin the throttle open, buttons[0] can
+  // hold the handbrake on, and axes[0] can be some unrelated axis parked off
+  // centre. That is a car that steers itself and will not respond, which is
+  // very much worse than a controller that does nothing.
+  for (const p of navigator.getGamepads()) {
+    if (p && p.connected && p.mapping === 'standard') return p;
+  }
+  return null;
+}
+
+function readGamepad(): PadReading | null {
+  const pad = livePad();
+  if (!pad) {
+    padZero = null;
+    padEngaged = false;
+    padId = '';
+    return null;
+  }
+  if (pad.id !== padId) {
+    padId = pad.id;
+    padZero = null;
+    padEngaged = false;
+  }
+
+  const raw = pad.axes[0] ?? 0;
+  // Learn the resting value, but never from a stick that is being held: if the
+  // first sample is already deflected, wait for one that is not.
+  if (padZero === null && Math.abs(raw) < 0.5) padZero = raw;
+  const centred = raw - (padZero ?? 0);
+
+  const throttle = pad.buttons[7]?.value ?? 0;
+  const brake = pad.buttons[6]?.value ?? 0;
+  if (Math.abs(centred) > PAD_WAKE || throttle > 0.5 || brake > 0.5) padEngaged = true;
+  if (!padEngaged) return null;
+
   return {
-    throttle: pad.buttons[7]?.value ?? 0,
-    brake: pad.buttons[6]?.value ?? 0,
-    steer: deadzone(pad.axes[0] ?? 0),
+    throttle,
+    brake,
+    steer: Math.abs(centred) < PAD_DEADZONE ? 0 : centred,
     handbrake: pad.buttons[0]?.pressed ?? false,
     pausePressed: pad.buttons[9]?.pressed ?? false,
+  };
+}
+
+/**
+ * What the pad is doing right now, or null if there is none. Read by the pause
+ * screen: a controller misbehaving is invisible from the driver's seat, and
+ * this turns "the steering went funny" into something reportable.
+ */
+export function padDiagnostic(): PadDiagnostic | null {
+  const pad = livePad();
+  if (!pad) return null;
+  const raw = pad.axes[0] ?? 0;
+  const centred = raw - (padZero ?? 0);
+  return {
+    id: pad.id,
+    mapping: pad.mapping,
+    engaged: padEngaged,
+    zero: padZero ?? 0,
+    rawSteer: raw,
+    steer: Math.abs(centred) < PAD_DEADZONE ? 0 : centred,
+    throttle: pad.buttons[7]?.value ?? 0,
+    brake: pad.buttons[6]?.value ?? 0,
   };
 }

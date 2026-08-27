@@ -124,6 +124,17 @@ export function setSpeechEnabled(on: boolean): void {
   if (!on) stopSpeech();
 }
 
+/**
+ * `speechSynthesis` belongs to the browser, not to the page: an utterance
+ * already queued carries on after the page navigates away or is closed, so a
+ * half-finished sentence follows you out of the game. Nothing else in the app
+ * has that problem, because everything else dies with the tab.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', stopSpeech);
+  window.addEventListener('beforeunload', stopSpeech);
+}
+
 export function isSpeechEnabled(): boolean {
   return enabled;
 }

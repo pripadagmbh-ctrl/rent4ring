@@ -27,7 +27,14 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   const [length, width, height] = car.size;
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
-  const damageTargets: { mesh: THREE.Mesh; baseY: number; baseRot: THREE.Euler }[] = [];
+  const damageTargets: {
+    mesh: THREE.Mesh;
+    baseY: number;
+    baseRot: THREE.Euler;
+    baseScale: THREE.Vector3;
+    /** 0 for the hull, towards 1 for the small bolt-on parts. */
+    fragility: number;
+  }[] = [];
 
   const shape = SHAPES[car.id] ?? DEFAULT_SHAPE;
   const P = shape.profile;
@@ -66,7 +73,24 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
 
   const add = (mesh: THREE.Mesh, damageable = false) => {
     group.add(mesh);
-    if (damageable) damageTargets.push({ mesh, baseY: mesh.position.y, baseRot: mesh.rotation.clone() });
+    if (damageable) {
+      // Small parts take the worst of it. A splitter, a grille or a headlight
+      // is knocked askew by a shunt that only creases the hull, and moving
+      // every panel by the same amount was why the damage read as a slightly
+      // grubby car rather than a broken one. Measured off the geometry at
+      // build time so the call sites stay a plain boolean.
+      mesh.geometry.computeBoundingBox();
+      const box = mesh.geometry.boundingBox;
+      const span = box ? box.max.z - box.min.z : length;
+      const fragility = THREE.MathUtils.clamp(1 - span / length, 0, 1);
+      damageTargets.push({
+        mesh,
+        baseY: mesh.position.y,
+        baseRot: mesh.rotation.clone(),
+        baseScale: mesh.scale.clone(),
+        fragility,
+      });
+    }
     return mesh;
   };
 
@@ -413,21 +437,35 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
     currentDamage = d;
     if (options.ghost) return;
 
+    // Paint goes past dull and into bare, scuffed panel: further towards grey,
+    // rough, and with the metallic flake gone. A wrecked car should not still
+    // be catching the light like a showroom one.
     const base = new THREE.Color(car.color);
-    bodyMat.color.copy(base.clone().lerp(new THREE.Color(0x4a4a4a), d * 0.55));
-    bodyMat.roughness = 0.3 + d * 0.5;
-    bodyMat.metalness = 0.3 - d * 0.15;
+    bodyMat.color.copy(base.clone().lerp(new THREE.Color(0x3c3a38), d * 0.78));
+    bodyMat.roughness = 0.3 + d * 0.62;
+    bodyMat.metalness = 0.3 - d * 0.26;
     // Crazed glass goes matte and milky rather than more see-through.
-    glassMat.roughness = 0.05 + d * 0.6;
-    glassMat.color.setHex(0x0b1015).lerp(new THREE.Color(0x7a8087), d * 0.45);
+    glassMat.roughness = 0.05 + d * 0.85;
+    glassMat.color.setHex(0x0b1015).lerp(new THREE.Color(0x8f959c), d * 0.7);
 
     damageTargets.forEach((target, i) => {
+      // Deterministic per part, so a given car always crumples the same way.
       const wobble = ((i * 2654435761) % 1000) / 1000 - 0.5;
-      target.mesh.position.y = target.baseY - d * 0.045 * (0.5 + Math.abs(wobble));
+      const bite = d * (0.35 + target.fragility * 1.15);
+
+      target.mesh.position.y = target.baseY - bite * 0.075 * (0.5 + Math.abs(wobble));
       target.mesh.rotation.set(
-        target.baseRot.x + wobble * d * 0.09,
-        target.baseRot.y + wobble * d * 0.06,
-        target.baseRot.z + wobble * d * 0.11,
+        target.baseRot.x + wobble * bite * 0.22,
+        target.baseRot.y + wobble * bite * 0.16,
+        target.baseRot.z + wobble * bite * 0.26,
+      );
+      // Crumpled panels are shorter. A few per cent is enough to break the
+      // silhouette's straight lines, which is what the eye actually reads.
+      const squash = 1 - bite * 0.07 * (0.5 + Math.abs(wobble));
+      target.mesh.scale.set(
+        target.baseScale.x * (1 + bite * 0.03 * wobble),
+        target.baseScale.y * squash,
+        target.baseScale.z * squash,
       );
     });
   };
