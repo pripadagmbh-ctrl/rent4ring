@@ -1025,7 +1025,11 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
   disposables.push(rockMat, stoneMat, darkStoneMat, roofMat);
 
   // The cone the castle stands on, skirted into the surrounding land.
-  const hillGeo = new THREE.ConeGeometry(210, HILL_TOP - HILL_BASE, 22, 3);
+  // 130 m at the base, not 210: the approach now runs past the rock on its
+  // way to Meuspath and passes 163 m from the summit, so a 210 m skirt put
+  // the road inside the hill. The real castle sits on a steep volcanic cone
+  // anyway — 92 m of rise over 130 m reads closer to it than the old slope.
+  const hillGeo = new THREE.ConeGeometry(130, HILL_TOP - HILL_BASE, 22, 3);
   // Roughen it so it reads as rock rather than a perfect cone.
   {
     const pos = hillGeo.attributes.position;
@@ -1138,9 +1142,9 @@ function buildNuerburg(root: THREE.Group, disposables: { dispose(): void }[]): v
   };
   for (let i = 0; i < 260; i++) {
     const a = rand() * Math.PI * 2;
-    const r = 55 + rand() * 150;
+    const r = 45 + rand() * 80;
     // Follow the cone surface downward as the radius grows.
-    const t = (r - 55) / 150;
+    const t = (r - 45) / 80;
     const y = HILL_TOP - 10 - t * (HILL_TOP - HILL_BASE - 6);
     const sc = 0.9 + rand() * 0.8;
     const x = Math.cos(a) * r;
