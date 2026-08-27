@@ -3,6 +3,7 @@ import { FLEET, type Car } from './data/fleet';
 import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult } from './game/Game';
 import { listenForAudioUnlock } from './game/audioContext';
+import approachData from './data/approach.json';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
 import Hud from './ui/Hud';
@@ -71,7 +72,10 @@ const EMPTY_HUD: HudState = {
   progress: 0,
   carPos: { x: 0, z: 0 },
   ghostPos: null,
-  approachRemaining: 870,
+  // From the generated route, not a copy of it: the drive was 874 m before
+  // it was rerouted through the roundabout, and a hardcoded number here
+  // shows the old distance for the first frame of every drive.
+  approachRemaining: approachData.length,
   damage: 0,
   damageCost: 0,
   muellerMood: 'idle',

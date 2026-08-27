@@ -271,6 +271,8 @@ export class Approach extends RoadPath {
   /** Index on the circuit where this road merges. */
   readonly joinIndex: number;
   readonly from: string;
+  /** The B258 roundabout the route goes round, in world coordinates. */
+  readonly roundabout: { x: number; z: number; radius: number };
 
   constructor() {
     super(approachData.points as { x: number; y: number; z: number }[], {
@@ -280,6 +282,7 @@ export class Approach extends RoadPath {
     });
     this.joinIndex = approachData.joinIndex;
     this.from = approachData.from;
+    this.roundabout = approachData.roundabout;
   }
 }
 
