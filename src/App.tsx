@@ -1,5 +1,6 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FLEET, type Car } from './data/fleet';
+import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult } from './game/Game';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
@@ -62,7 +63,7 @@ const EMPTY_HUD: HudState = {
   offTrack: false,
   gripUsage: 0,
   lateralG: 0,
-  countdown: 3,
+  countdown: 3.2,
   delta: null,
   sectors: [],
   contacts: 0,
@@ -96,6 +97,8 @@ function AppInner() {
   const [isTouch, setIsTouch] = useState(false);
   const [gameReady, setGameReady] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
+  /** The send-off Herr Müller gave in the garage, carried into the drive. */
+  const [departureLine, setDepartureLine] = useState<MuellerLine | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
@@ -120,21 +123,22 @@ function AppInner() {
     let game: Game;
     try {
       game = new Game(canvas, car, {
-        onHud(state) {
-          // Copy, because Game reuses its telemetry object between frames.
-          pending = { ...state, sectors: [...state.sectors] };
-          if (!hudFrame.current) {
-            hudFrame.current = requestAnimationFrame(() => {
-              hudFrame.current = 0;
-              if (pending) setHud(pending);
-            });
-          }
-        },
-        onLapComplete(result) {
-          setLapResult(result);
-          game.setPaused(true);
-        },
-      });
+      departureLine,
+      onHud(state) {
+        // Copy, because Game reuses its telemetry object between frames.
+        pending = { ...state, sectors: [...state.sectors] };
+        if (!hudFrame.current) {
+          hudFrame.current = requestAnimationFrame(() => {
+            hudFrame.current = 0;
+            if (pending) setHud(pending);
+          });
+        }
+      },
+      onLapComplete(result) {
+        setLapResult(result);
+        game.setPaused(true);
+      },
+    });
     } catch (err) {
       setFatal(err instanceof Error ? err.message : String(err));
       return;
@@ -187,7 +191,9 @@ function AppInner() {
     if (g) g.input.captureEnabled = !paused && !lapResult;
   }, [paused, lapResult, gameReady]);
 
-  const startDriving = useCallback(() => {
+  const startDriving = useCallback((farewell?: MuellerLine) => {
+    // Straight from the menu there is no garage send-off; the game picks one.
+    setDepartureLine(farewell ?? null);
     setHud(EMPTY_HUD);
     setLapResult(null);
     setPaused(false);
@@ -219,7 +225,7 @@ function AppInner() {
       <div className="app">
         <Menu
           onGarage={() => setPhase('garage')}
-          onQuickStart={startDriving}
+          onQuickStart={() => startDriving()}
           carLabel={`${car.brand} ${car.model}`}
         />
       </div>

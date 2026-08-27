@@ -26,7 +26,6 @@ export class GarageScene {
   private turntable = new THREE.Group();
   private carMesh: CarMesh | null = null;
   private disposables: { dispose(): void }[] = [];
-  private envRT: THREE.WebGLRenderTarget | null = null;
   private running = false;
   private frame = 0;
   private clock = new THREE.Clock();
@@ -51,12 +50,16 @@ export class GarageScene {
 
     this.scene.background = new THREE.Color(0x14171b);
     // Metallic paint needs something to reflect, or it shades like dark glass.
-    // The render target owns the GPU texture; it is kept for dispose().
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
-    this.scene.environment = this.envRT.texture;
+    const roomEnv = new RoomEnvironment();
+    // pmrem.dispose() frees the generator but not the baked render target —
+    // keep that in disposables so dispose() can free it.
+    const envRT = pmrem.fromScene(roomEnv, 0.04);
+    this.scene.environment = envRT.texture;
     this.scene.environmentIntensity = 0.55;
     pmrem.dispose();
+    roomEnv.dispose();
+    this.disposables.push(envRT);
     this.buildRoom();
     this.scene.add(this.turntable);
     this.setCar(car);
@@ -402,7 +405,6 @@ export class GarageScene {
     }
     this.carMesh?.dispose();
     for (const d of this.disposables) d.dispose();
-    this.envRT?.dispose();
     this.renderer.dispose();
   }
 

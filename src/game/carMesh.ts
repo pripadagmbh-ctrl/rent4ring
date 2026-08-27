@@ -44,12 +44,16 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   });
   const accentMat = new THREE.MeshStandardMaterial({ color: car.accent, roughness: 0.38, metalness: 0.35 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.55, metalness: 0.3 });
+  // Opaque, deeply tinted glass. Transparent glass here looked see-through in
+  // the worst way: there is no interior behind it, so the view continued
+  // through the backface-culled far side of the hull and out into the scene —
+  // the whole car read as hollow from behind. Racing tint hides all of that
+  // and sorts correctly against every other surface.
   const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x10161d,
-    roughness: 0.06,
-    metalness: 0.3,
-    transparent: true,
-    opacity: 0.85,
+    color: 0x0b1015,
+    roughness: 0.05,
+    metalness: 0.4,
+    envMapIntensity: 1.5,
   });
   const tyreMat = new THREE.MeshStandardMaterial({ color: 0x131313, roughness: 0.95 });
   const rimMat = new THREE.MeshStandardMaterial({
@@ -96,7 +100,8 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   add(cabin, true);
   disposables.push(cabinGeo);
 
-  // Roof cap in body colour (skipped on the open Spyder).
+  // Roof cap in body colour (skipped on the open Spyder). The MINI wears its
+  // trademark contrast roof in the accent colour instead.
   if (!shape.openTop) {
     const roofGeo = loft(
       length,
@@ -108,7 +113,7 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
       6,
       [P.cabinSpan[0] + 0.06, P.cabinSpan[1] - 0.02],
     );
-    const roof = new THREE.Mesh(roofGeo, bodyMat);
+    const roof = new THREE.Mesh(roofGeo, shape.roofAccent ? accentMat : bodyMat);
     add(roof, true);
     disposables.push(roofGeo);
   } else {
@@ -118,6 +123,35 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
       const hoop = new THREE.Mesh(hoopGeo, trimMat);
       hoop.position.set(dx * width, height * 0.78, -length * 0.08);
       group.add(hoop);
+    }
+    // The Spyder's humps: body-colour cowls flowing back from the hoops.
+    const humpGeo = new THREE.SphereGeometry(0.17, 12, 8);
+    disposables.push(humpGeo);
+    for (const dx of [-0.3, 0.3]) {
+      const hump = new THREE.Mesh(humpGeo, bodyMat);
+      hump.scale.set(0.85, 0.65, 1.7);
+      hump.position.set(dx * width, height * 0.6, -length * 0.16);
+      add(hump, true);
+    }
+  }
+
+  // Door mirrors at the base of the A-pillars — small, but half of what makes
+  // a silhouette read as a road car at all.
+  {
+    const tFront = P.cabinSpan[1];
+    const mirrorZ = (tFront * length) / 2 - 0.06;
+    const mirrorX = (width / 2) * P.plan(tFront);
+    const mirrorY = height * (P.belt(tFront) + 0.1);
+    const armGeo = new THREE.BoxGeometry(0.1, 0.022, 0.035);
+    const shellGeo = new THREE.BoxGeometry(0.055, 0.085, 0.15);
+    disposables.push(armGeo, shellGeo);
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(armGeo, trimMat);
+      arm.position.set(side * (mirrorX + 0.04), mirrorY, mirrorZ);
+      group.add(arm);
+      const shell = new THREE.Mesh(shellGeo, bodyMat);
+      shell.position.set(side * (mirrorX + 0.1), mirrorY + 0.02, mirrorZ);
+      add(shell, true);
     }
   }
 
@@ -154,12 +188,30 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   add(grille, true);
   disposables.push(grilleGeo);
 
+  // Tailpipes — centre-exit pair or one per corner; the Taycan gets none.
+  if (!car.electric) {
+    const tipGeo = new THREE.CylinderGeometry(0.048, 0.054, 0.14, 12);
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0x3f444b, roughness: 0.35, metalness: 0.8 });
+    disposables.push(tipGeo, tipMat);
+    const xs = shape.exhaust === 'centre' ? [-0.07, 0.07] : [-width * 0.3, width * 0.3];
+    for (const x of xs) {
+      const tip = new THREE.Mesh(tipGeo, tipMat);
+      tip.rotation.x = Math.PI / 2;
+      tip.position.set(x, height * 0.16, -length * 0.485);
+      group.add(tip);
+    }
+  }
+
   // ------------------------------------------------------------- rear wing
   if (shape.wing !== 'none') {
     const span = width * 0.95;
     const wingGeo = new THREE.BoxGeometry(span, 0.05, shape.wing === 'gt' ? 0.4 : 0.26);
     const wing = new THREE.Mesh(wingGeo, shape.wing === 'gt' ? accentMat : trimMat);
-    const wingY = height * (shape.wing === 'gt' ? 1.04 : 0.82);
+    // The GT wing stands on its stays; the lip is a ducktail and must sit ON
+    // the rear deck — floated at a fixed fraction of overall height it hovered
+    // in mid-air over the low-tailed cars.
+    const wingY =
+      shape.wing === 'gt' ? height * 1.04 : height * (P.belt(-0.92) + 0.05);
     wing.position.set(0, wingY, -length * (shape.wing === 'gt' ? 0.42 : 0.46));
     wing.rotation.x = -0.13;
     add(wing, true);
@@ -186,7 +238,9 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   disposables.push(headGeo, headMat);
   for (const side of [-1, 1]) {
     const h = new THREE.Mesh(headGeo, headMat);
-    h.scale.set(1.7, 0.8, 0.6);
+    // Round bug-eyes on the MINI, swept ovals on everything else.
+    if (shape.roundLamps) h.scale.set(1.15, 1.15, 0.6);
+    else h.scale.set(1.7, 0.8, 0.6);
     h.position.set(side * width * 0.32, height * 0.36, length * 0.47);
     add(h, true);
   }
@@ -287,10 +341,16 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
   const wheelRadius = 0.34;
   const tyreWidth = car.grip > 1.25 ? 0.33 : 0.26;
   const tyreGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, tyreWidth, 22);
-  const rimGeo = new THREE.CylinderGeometry(wheelRadius * 0.64, wheelRadius * 0.64, tyreWidth + 0.012, 14);
-  const spokeGeo = new THREE.BoxGeometry(wheelRadius * 1.18, 0.035, 0.055);
+  // A dark barrel behind the spokes gives the wheel visual depth.
+  const rimGeo = new THREE.CylinderGeometry(wheelRadius * 0.62, wheelRadius * 0.62, tyreWidth - 0.06, 14);
+  // Long axis along y: the tyre cylinder is rotated onto the x-axis, so a
+  // y-long box stands in the wheel face and rotating about x fans the five
+  // spokes radially (axis-parallel boxes all collapsed onto each other).
+  const spokeGeo = new THREE.BoxGeometry(0.035, wheelRadius * 1.16, 0.055);
+  const hubGeo = new THREE.CylinderGeometry(wheelRadius * 0.16, wheelRadius * 0.16, 0.03, 10);
   const caliperGeo = new THREE.BoxGeometry(0.07, 0.2, 0.11);
-  disposables.push(tyreGeo, rimGeo, spokeGeo, caliperGeo);
+  const barrelMat = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.7, metalness: 0.3 });
+  disposables.push(tyreGeo, rimGeo, spokeGeo, hubGeo, caliperGeo, barrelMat);
 
   const wheels: THREE.Object3D[] = [];
   const frontWheels: THREE.Object3D[] = [];
@@ -306,14 +366,21 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
       const tyre = new THREE.Mesh(tyreGeo, tyreMat);
       tyre.rotation.z = Math.PI / 2;
       if (isRear) tyre.scale.set(1, 1 + rearExtra * 2, 1);
-      const rim = new THREE.Mesh(rimGeo, rimMat);
-      rim.rotation.z = Math.PI / 2;
-      spin.add(tyre, rim);
+      const barrel = new THREE.Mesh(rimGeo, barrelMat);
+      barrel.rotation.z = Math.PI / 2;
+      spin.add(tyre, barrel);
+      // Spokes and hub sit at the outboard face of the rim, not buried in it.
+      const face = side * (tyreWidth / 2 - 0.02);
       for (let s = 0; s < 5; s++) {
         const spoke = new THREE.Mesh(spokeGeo, rimMat);
         spoke.rotation.x = (s / 5) * Math.PI;
+        spoke.position.x = face;
         spin.add(spoke);
       }
+      const hub = new THREE.Mesh(hubGeo, rimMat);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.x = face;
+      spin.add(hub);
       pivot.add(spin);
 
       const caliper = new THREE.Mesh(caliperGeo, caliperMat);
@@ -350,8 +417,9 @@ export function buildCarMesh(car: Car, options: Options = {}): CarMesh {
     bodyMat.color.copy(base.clone().lerp(new THREE.Color(0x4a4a4a), d * 0.55));
     bodyMat.roughness = 0.3 + d * 0.5;
     bodyMat.metalness = 0.3 - d * 0.15;
-    glassMat.opacity = 0.85 + d * 0.11;
-    glassMat.roughness = 0.06 + d * 0.5;
+    // Crazed glass goes matte and milky rather than more see-through.
+    glassMat.roughness = 0.05 + d * 0.6;
+    glassMat.color.setHex(0x0b1015).lerp(new THREE.Color(0x7a8087), d * 0.45);
 
     damageTargets.forEach((target, i) => {
       const wobble = ((i * 2654435761) % 1000) / 1000 - 0.5;
@@ -505,6 +573,12 @@ interface Shape {
   itasha?: boolean;
   rimColor?: number;
   raceNumber?: string;
+  /** Contrast roof in the accent colour (the MINI look). */
+  roofAccent?: boolean;
+  /** Tailpipe arrangement; EVs get none regardless. */
+  exhaust?: 'dual' | 'centre';
+  /** Round lamps instead of the swept ovals (the MINI face). */
+  roundLamps?: boolean;
 }
 
 function makeProfile(spec: {
@@ -592,6 +666,9 @@ const SHAPES: Record<string, Shape> = {
     wing: 'lip',
     rimColor: 0xf2f2f2,
     raceNumber: '17',
+    roofAccent: true,
+    roundLamps: true,
+    exhaust: 'centre',
   },
   // GR Yaris: chunky hot hatch, fast windscreen, wide hips.
   'gr-yaris': {
@@ -755,6 +832,7 @@ const SHAPES: Record<string, Shape> = {
     wing: 'gt',
     rimColor: 0x2f6fb2,
     raceNumber: '911',
+    exhaust: 'centre',
   },
   // 296 GTB: cab forward, short tail, wide mid-engined hips.
   'ferrari-296-gtb': {
@@ -788,6 +866,7 @@ const SHAPES: Record<string, Shape> = {
     wing: 'lip',
     rimColor: 0x1a1a1a,
     raceNumber: '296',
+    exhaust: 'centre',
   },
 };
 

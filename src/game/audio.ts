@@ -220,6 +220,14 @@ export class EngineAudio {
     });
   }
 
+  /** The user's mute toggle alone — pause must never silence the SFX bus. */
+  setUserMuted(muted: boolean): void {
+    this.userMuted = muted;
+    if (this.sfx && this.ctx) {
+      this.sfx.gain.setTargetAtTime(muted ? 0.0001 : 0.9, this.ctx.currentTime, 0.05);
+    }
+  }
+
   setMuted(muted: boolean): void {
     this.muted = muted;
     if (this.master && this.ctx) {

@@ -13,6 +13,11 @@
   --font-display: 'Barlow Condensed', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* iOS notch / home-indicator insets; resolve to 0 everywhere else. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 * {
@@ -251,8 +256,8 @@ button {
 
 .hud__topleft {
   position: absolute;
-  top: 18px;
-  left: 18px;
+  top: calc(18px + var(--safe-top));
+  left: calc(18px + var(--safe-left));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -311,8 +316,8 @@ button {
 /* ------------------------------------------------------------ speedo */
 .hud__bottomright {
   position: absolute;
-  right: 22px;
-  bottom: 22px;
+  right: calc(22px + var(--safe-right));
+  bottom: calc(22px + var(--safe-bottom));
   display: flex;
   align-items: flex-end;
   gap: 16px;
@@ -361,8 +366,8 @@ button {
 
 .revbar {
   position: absolute;
-  right: 22px;
-  bottom: 118px;
+  right: calc(22px + var(--safe-right));
+  bottom: calc(118px + var(--safe-bottom));
   width: 320px;
   height: 9px;
   border-radius: 5px;
@@ -390,7 +395,7 @@ button {
 /* ------------------------------------------------------------- section */
 .hud__section {
   position: absolute;
-  top: 18px;
+  top: calc(18px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
@@ -480,8 +485,8 @@ button {
 /* ------------------------------------------------------------- minimap */
 .minimap {
   position: absolute;
-  left: 18px;
-  bottom: 18px;
+  left: calc(18px + var(--safe-left));
+  bottom: calc(18px + var(--safe-bottom));
   width: 190px;
   height: 210px;
   background: rgba(8, 11, 15, 0.72);
@@ -500,8 +505,8 @@ button {
 /* ------------------------------------------------------------ hud misc */
 .hud__hint {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: calc(18px + var(--safe-top));
+  right: calc(18px + var(--safe-right));
   text-align: right;
   font-size: 11px;
   letter-spacing: 0.14em;

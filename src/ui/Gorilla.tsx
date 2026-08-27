@@ -1,9 +1,19 @@
 export type Mood = 'idle' | 'happy' | 'angry' | 'scared' | 'cheer' | 'trophy';
 
+/**
+ * What his arms are doing. Independent of `mood`, which drives the face — he can
+ * wave goodbye while looking worried, which is most of his working day.
+ */
+export type Gesture = 'none' | 'wave' | 'point' | 'thumb' | 'present';
+
 interface Props {
   mood: Mood;
   /** Show the trophy in his raised hand. */
   trophy?: boolean;
+  /** Arm pose; overrides whatever the mood was doing with them. */
+  gesture?: Gesture;
+  /** Animates the jaw, for while a line of his is being shown. */
+  talking?: boolean;
   className?: string;
 }
 
@@ -15,10 +25,26 @@ interface Props {
  * The shades ride up onto his forehead whenever he loses his composure, so you
  * can actually see what he makes of your driving.
  */
-export default function Gorilla({ mood, trophy = false, className }: Props) {
+export default function Gorilla({
+  mood,
+  trophy = false,
+  gesture = 'none',
+  talking = false,
+  className,
+}: Props) {
+  const classes = [
+    'gorilla',
+    `gorilla--${mood}`,
+    gesture !== 'none' && `gorilla--g-${gesture}`,
+    talking && 'gorilla--talking',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <svg
-      className={`gorilla gorilla--${mood} ${className ?? ''}`}
+      className={classes}
       viewBox="0 0 260 220"
       role="img"
       aria-label={`Herr Müller looks ${MOOD_LABEL[mood]}`}
