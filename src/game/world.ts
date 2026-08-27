@@ -186,10 +186,50 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
 // =====================================================================
 // The public-road approach from Burgstraße 1
 // =====================================================================
-export function buildApproachWorld(approach: Approach): WorldHandles {
+
+/** Per approach-point distance and side (relative to `Approach.normal`) of the nearest circuit point. */
+interface TrackClearance {
+  dist: number;
+  side: 1 | -1;
+}
+
+/** Keep the meadow ribbon at least this far from the actual track surface. */
+const TRACK_MARGIN = 3;
+/** Trees need more room than the grass ribbon: their offset alone runs 4-16 m. */
+const TREE_TRACK_MARGIN = 20;
+
+/**
+ * Real public road running for a stretch right beside the actual circuit near
+ * the start/finish straight (true to the routed OSM data, as close as 2.6 m
+ * at one point) — the approach world is built with no idea the circuit is
+ * there, so its decorations (roadside trees, the open meadow) need to know
+ * how much room they actually have on each side.
+ */
+function trackClearance(approach: Approach, track: Track): TrackClearance[] {
+  const out: TrackClearance[] = new Array(approach.count);
+  for (let i = 0; i < approach.count; i++) {
+    const p = approach.at(i);
+    let best = Infinity;
+    let bestPos: THREE.Vector3 = p.pos;
+    for (let j = 0; j < track.count; j++) {
+      const tp = track.at(j).pos;
+      const d = p.pos.distanceToSquared(tp);
+      if (d < best) {
+        best = d;
+        bestPos = tp;
+      }
+    }
+    const toTrack = bestPos.clone().sub(p.pos);
+    out[i] = { dist: Math.sqrt(best), side: toTrack.dot(p.normal) >= 0 ? 1 : -1 };
+  }
+  return out;
+}
+
+export function buildApproachWorld(approach: Approach, track: Track): WorldHandles {
   const root = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(approach, i, side, offset, lift);
+  const clearance = trackClearance(approach, track);
 
   // Fresher village tarmac (#3A3B3D "Asphalt neu"), lifted slightly so it
   // does not read as wet. DoubleSide for the same reason as the circuit's
@@ -215,14 +255,28 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
     uv: number,
   ) => ribbon(approach, inner, outer, mat, uv, disposables);
 
-  root.add(rib((i) => edge(i, -1, 1.2, -0.12), (i) => edge(i, -1, 40, -3), grassMat, 0.02));
-  // The Rent4Ring yard sits on the LEFT of the first ~50 m (the departure
-  // choreography drives all over it) — hold the meadow back to a kerb-side
-  // strip there, then fade it out to full width. Without this the falling
-  // grass sheet cut straight through the forecourt, ramp and link lane.
+  // Real public road running for a stretch right beside the actual circuit
+  // (true to the OSM route near the start/finish straight, as close as 2.6 m
+  // at one point) — hold the meadow on the track-facing side back from
+  // MEADOW_WIDTH to whatever clearance is left, or the grass sheet renders
+  // straight through the track's own asphalt.
+  const meadowWidth = (i: number, side: number) => {
+    const c = clearance[i];
+    return c.side === side ? Math.max(3, Math.min(40, c.dist - TRACK_MARGIN)) : 40;
+  };
+  root.add(
+    rib((i) => edge(i, -1, 1.2, -0.12), (i) => edge(i, -1, meadowWidth(i, -1), -3), grassMat, 0.02),
+  );
+  // The Rent4Ring yard also sits on the LEFT of the first ~50 m (the
+  // departure choreography drives all over it) — hold the meadow back to a
+  // kerb-side strip there too, then fade it out to full width. Without this
+  // the falling grass sheet cut straight through the forecourt, ramp and
+  // link lane.
   const leftMeadow = (i: number) => {
     const f = THREE.MathUtils.smoothstep(i, 7, 15);
-    return edge(i, 1, 1.3 + (40 - 1.3) * f, -0.12 + (-3 + 0.12) * f);
+    const yardWidth = 1.3 + (40 - 1.3) * f;
+    const width = Math.min(yardWidth, meadowWidth(i, 1));
+    return edge(i, 1, width, -0.12 + (-3 + 0.12) * f);
   };
   root.add(rib(leftMeadow, (i) => edge(i, 1, 1.2, -0.12), grassMat, 0.02));
   root.add(rib((i) => edge(i, -1, 0, 0.01), (i) => edge(i, -1, 1.25, -0.1), kerbMat, 0.06));
@@ -247,7 +301,7 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
   }
   instance(dashGeo, dashMat, dashes, root, disposables);
 
-  buildVillage(approach, root, disposables);
+  buildVillage(approach, root, disposables, clearance);
   buildHomeBase(approach, root, disposables);
 
   return { root, dispose: () => disposables.forEach((d) => d.dispose()) };
@@ -256,7 +310,12 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
 // =====================================================================
 // Village houses along the approach
 // =====================================================================
-function buildVillage(approach: Approach, root: THREE.Group, disposables: { dispose(): void }[]): void {
+function buildVillage(
+  approach: Approach,
+  root: THREE.Group,
+  disposables: { dispose(): void }[],
+  clearance: TrackClearance[],
+): void {
   const wallGeo = new THREE.BoxGeometry(1, 1, 1);
   const roofGeo = new THREE.ConeGeometry(0.78, 0.55, 4);
   const wallMats = [0xe8e4dc, 0xdcd6c8, 0xcfc9bd, 0xe0d8cc].map(
@@ -334,6 +393,11 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
   for (let i = villageEnd; i < approach.count - 6; i += 3) {
     for (const side of [1, -1]) {
       if (rand() > 0.5) continue;
+      // The real road runs within a couple of metres of the circuit itself
+      // for a stretch near the end (true to the OSM route) — a tree offset
+      // 4-16 m out would land on the actual track there.
+      const c = clearance[i];
+      if (c.side === side && c.dist < TREE_TRACK_MARGIN) continue;
       const p = approach.at(i);
       const off = p.halfWidth + 4 + rand() * 12;
       const pos = p.pos.clone().addScaledVector(p.normal, side * off);
