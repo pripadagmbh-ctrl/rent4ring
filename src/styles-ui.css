@@ -1144,8 +1144,27 @@
    Mobile HUD, consolidated. This block lives at the END of the stylesheet
    on purpose: the base .ps-pad rules above beat earlier media queries on
    source order, so the phone layout must come last to win.
+
+   Keyed on height as well as width, because a phone turned sideways is
+   852x393, not 393x852 — wider than the 760 px breakpoint, so it used to
+   fall back to the desktop HUD and Herr Müller ran off the bottom of the
+   screen. Everything in this block is HUD positioning only, so widening
+   the query does not disturb the menu or the garage.
+
+   700 px, not 560: the desktop rail needs just over 400 px for the timing
+   stack and Herr Müller, and the minimap claims 228 px off the bottom, so
+   anything shorter than about 700 px cannot show both without them touching.
    ===================================================================== */
-@media (max-width: 760px) {
+@media (max-width: 900px), (max-height: 700px) {
+  /* Goes with this layout, not with a breakpoint of its own: the compact
+     HUD moves the speed readout to the top right, straight under where the
+     keyboard hints sit. They were hidden below 760 px only, so every size
+     in between showed the hints on top of the speedo. And a screen this
+     size is a touch screen — there is no keyboard to hint about. */
+  .hud__hint {
+    display: none;
+  }
+
   /* Top-left: compact lap/approach box. */
   .timebox {
     min-width: 0;
@@ -1255,7 +1274,10 @@
     height: 116px;
   }
 
-  /* Pads: two per corner, no overlap from 360 px wide up. */
+  /* Pads: two per corner. The inner offsets are 98, not 102: at 360 px wide
+     the four 80 px pads plus 14 px outer margins left the inner pair 4 px
+     short and they overlapped. 98 gives 4 px of clearance instead, and 360
+     is the narrowest phone worth supporting. */
   .ps-pad {
     width: 80px;
     height: 80px;
@@ -1265,10 +1287,10 @@
     left: calc(14px + var(--safe-left));
   }
   .ps-pad--right {
-    left: calc(102px + var(--safe-left));
+    left: calc(98px + var(--safe-left));
   }
   .ps-pad--square {
-    right: calc(102px + var(--safe-right));
+    right: calc(98px + var(--safe-right));
   }
   .ps-pad--cross {
     right: calc(14px + var(--safe-right));
@@ -1294,4 +1316,29 @@
   font-size: 11px;
   color: var(--muted);
   word-break: break-word;
+}
+
+/* =====================================================================
+   Phone held sideways: 852x393, so the whole HUD has ~360 px of usable
+   height. Last block in the last stylesheet, so it wins on source order.
+   ===================================================================== */
+@media (max-height: 700px) {
+  /* Herr Müller's full panel is 259 px tall. With the timing stack taking
+     135 of the 361 available, that left him hanging 26 px off the bottom
+     of the screen. The big portrait goes first — it is the one part that
+     carries no information — and the speech is clamped to three lines so
+     a long quip cannot push the panel out again. */
+  .mueller__stage {
+    height: 58px;
+  }
+  .mueller__stage .gorilla {
+    width: 92px;
+  }
+  .mueller__line {
+    min-height: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
