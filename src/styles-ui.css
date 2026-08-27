@@ -791,76 +791,9 @@
     display: none;
   }
 
-  /* On a phone the bottom band belongs to the controls alone. Everything that
-     is only there to be read moves up out of the way. */
-  .mueller {
-    top: 96px;
-    bottom: auto;
-    left: 10px;
-    width: 118px;
-    padding: 6px;
-  }
-  .mueller__stage {
-    height: 62px;
-  }
-  .mueller__stage .gorilla {
-    width: 72px;
-  }
-  .mueller__line {
-    font-size: 9.5px;
-    line-height: 1.3;
-    min-height: 24px;
-    margin-bottom: 5px;
-  }
-  .mueller__damage-head {
-    font-size: 8.5px;
-  }
-  .mueller__damage-head b {
-    font-size: 11px;
-  }
-
-  .minimap {
-    left: auto;
-    right: 10px;
-    top: 96px;
-    bottom: auto;
-    width: 104px;
-    height: 116px;
-  }
-
-  /* Speed and gear tuck in above the pedals. */
-  .hud__bottomright {
-    right: 12px;
-    bottom: auto;
-    top: 44px;
-    align-items: flex-start;
-  }
-  .revbar {
-    right: 12px;
-    top: 26px;
-    bottom: auto;
-    width: 150px;
-  }
 
   .touch-controls {
     height: 34%;
-  }
-  .ps-pad {
-    width: 76px;
-    height: 76px;
-    bottom: 14px;
-  }
-  .ps-pad--left {
-    left: 12px;
-  }
-  .ps-pad--right {
-    left: 100px;
-  }
-  .ps-pad--square {
-    right: 100px;
-  }
-  .ps-pad--cross {
-    right: 12px;
   }
 }
 
@@ -1137,4 +1070,21 @@
   .ps-pad--cross {
     right: calc(14px + env(safe-area-inset-right, 0px));
   }
+}
+
+/* ============================================================ fatal screen */
+.fatal {
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.fatal__detail {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-word;
 }
