@@ -10,7 +10,8 @@ import type { Car } from '../data/fleet';
 import { Approach, Track, type RoadPath } from './track';
 import { Vehicle, type VehicleTelemetry } from './physics';
 import { buildWorld, buildApproachWorld, buildSky, type WorldHandles } from './world';
-import { buildCarMesh, type CarMesh } from './carMesh';
+import { type CarMesh } from './carMesh';
+import { buildVehicleMesh } from './vehicleMesh';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -283,7 +284,7 @@ export class Game {
     this.approachWorld = buildApproachWorld(this.approach, this.track);
     this.scene.add(this.approachWorld.root);
 
-    this.carMesh = buildCarMesh(car);
+    this.carMesh = buildVehicleMesh(car);
     this.carMesh.group.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.castShadow = true;
     });
@@ -296,7 +297,7 @@ export class Game {
     const parked = FLEET.filter((c) => c.id !== car.id);
     const spots = fleetParkingSpots(this.approach, parked.length);
     parked.forEach((other, i) => {
-      const mesh = buildCarMesh(other);
+      const mesh = buildVehicleMesh(other);
       mesh.group.position.copy(spots[i].position);
       mesh.group.rotation.y = spots[i].yaw;
       mesh.group.traverse((o) => {
@@ -834,7 +835,7 @@ export class Game {
 
   private ensureGhostMesh(): void {
     if (!this.ghostBest || this.ghostMesh) return;
-    const mesh = buildCarMesh({ ...this.car, color: 0x39c0ff, accent: 0x39c0ff }, { ghost: true });
+    const mesh = buildVehicleMesh({ ...this.car, color: 0x39c0ff, accent: 0x39c0ff }, { ghost: true });
     this.ghostMesh = mesh;
     this.scene.add(mesh.group);
   }

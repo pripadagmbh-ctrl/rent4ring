@@ -38,6 +38,12 @@ export interface Car {
   /** Rough body dimensions in metres (length, width, height). */
   size: [number, number, number];
   blurb: string;
+  /**
+   * Two wheels, not four. Only the mesh cares — the physics is a bicycle
+   * model either way, so a bike is simply a very light, very short RWD car
+   * with modest aero.
+   */
+  bike?: boolean;
 }
 
 export const FLEET: Car[] = [
@@ -224,6 +230,41 @@ export const FLEET: Car[] = [
     size: [4.57, 1.96, 1.19],
     blurb:
       "830 hp of V6 hybrid. Devastating down the Doettinger Hoehe, spiky on corner exit.",
+  },
+  // Herr Müller's own bike, and the only thing in the yard he rides himself.
+  // Appended rather than inserted: App.tsx opens on FLEET[5], and the garage
+  // remembers a car by index, so the order of everything above is load-bearing.
+  {
+    id: 'ducati-panigale-v4',
+    brand: 'Ducati',
+    model: 'Panigale V4',
+    ps: 216,
+    massKg: 195, // kerb, wet
+    drivetrain: 'RWD',
+    torqueNm: 124,
+    zeroToHundred: 2.8,
+    topSpeedKmh: 299,
+    gearRatios: [2.54, 2.05, 1.76, 1.55, 1.4, 1.29],
+    finalDrive: 4.6,
+    redlineRpm: 14500,
+    electric: false,
+    // Road tyres, and the model has no lean angle — a superbike's real limit
+    // is how far it dares tip, not the rubber, so this sits deliberately
+    // below the cup-shod Porsches rather than above them.
+    grip: 1.2,
+    // The winglets are worth about 30 kg at 270 km/h. Real, but small enough
+    // that the gauge still reports cornering load rather than downforce.
+    downforce: 0.000027,
+    frontWeight: 0.5,
+    wheelbase: 1.469,
+    cdA: 0.35,
+    targetLapSec: 660,
+    color: 0xc81420,
+    accent: 0x1b1d20,
+    size: [2.03, 0.74, 1.14],
+    bike: true,
+    blurb:
+      "Herr Mueller's own. 216 hp against 195 kg, and no bodywork between you and the Armco.",
   },
 ];
 
