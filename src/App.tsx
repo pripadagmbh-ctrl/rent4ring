@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FLEET, type Car } from './data/fleet';
 import { Game, type HudState, type LapResult } from './game/Game';
 import Menu from './ui/Menu';
@@ -8,6 +8,45 @@ import Ceremony from './ui/Ceremony';
 import TouchControls from './ui/TouchControls';
 
 type Phase = 'menu' | 'garage' | 'driving';
+
+/**
+ * WebGL setup can fail outright on old or locked-down devices. A crash there
+ * used to leave a silent white screen; this catches both render-phase errors
+ * (via the boundary) and Game-construction errors (via the fallback state),
+ * and offers the one thing that sometimes helps: a reload.
+ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { message: string | null }> {
+  state = { message: null as string | null };
+
+  static getDerivedStateFromError(err: unknown) {
+    return { message: err instanceof Error ? err.message : String(err) };
+  }
+
+  render() {
+    if (this.state.message !== null) return <FatalScreen message={this.state.message} />;
+    return this.props.children;
+  }
+}
+
+function FatalScreen({ message }: { message: string }) {
+  return (
+    <div className="screen fatal">
+      <div className="dialog">
+        <h2>Something broke</h2>
+        <p>
+          The game could not start on this device — usually a WebGL or graphics-driver limitation.
+          <br />
+          <span className="fatal__detail">{message}</span>
+        </p>
+        <div className="dialog__actions">
+          <button className="btn-primary" onClick={() => location.reload()}>
+            Reload
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const EMPTY_HUD: HudState = {
   phase: 'approach',
@@ -39,6 +78,14 @@ const EMPTY_HUD: HudState = {
 };
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
+  );
+}
+
+function AppInner() {
   const [phase, setPhase] = useState<Phase>('menu');
   const [car, setCar] = useState<Car>(FLEET[5]);
   const [assists, setAssists] = useState(true);
@@ -48,6 +95,7 @@ export default function App() {
   const [lapResult, setLapResult] = useState<LapResult | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [gameReady, setGameReady] = useState(false);
+  const [fatal, setFatal] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
@@ -56,7 +104,11 @@ export default function App() {
   const hudFrame = useRef(0);
 
   useEffect(() => {
-    setIsTouch(window.matchMedia('(pointer: coarse)').matches);
+    const mq = window.matchMedia('(pointer: coarse)');
+    setIsTouch(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsTouch(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
   }, []);
 
   useEffect(() => {
@@ -65,22 +117,28 @@ export default function App() {
     const canvas = canvasRef.current;
     let pending: HudState | null = null;
 
-    const game = new Game(canvas, car, {
-      onHud(state) {
-        // Copy, because Game reuses its telemetry object between frames.
-        pending = { ...state, sectors: [...state.sectors] };
-        if (!hudFrame.current) {
-          hudFrame.current = requestAnimationFrame(() => {
-            hudFrame.current = 0;
-            if (pending) setHud(pending);
-          });
-        }
-      },
-      onLapComplete(result) {
-        setLapResult(result);
-        game.setPaused(true);
-      },
-    });
+    let game: Game;
+    try {
+      game = new Game(canvas, car, {
+        onHud(state) {
+          // Copy, because Game reuses its telemetry object between frames.
+          pending = { ...state, sectors: [...state.sectors] };
+          if (!hudFrame.current) {
+            hudFrame.current = requestAnimationFrame(() => {
+              hudFrame.current = 0;
+              if (pending) setHud(pending);
+            });
+          }
+        },
+        onLapComplete(result) {
+          setLapResult(result);
+          game.setPaused(true);
+        },
+      });
+    } catch (err) {
+      setFatal(err instanceof Error ? err.message : String(err));
+      return;
+    }
 
     gameRef.current = game;
     // Dev-only handle so the running simulation can be inspected from the console.
@@ -101,6 +159,7 @@ export default function App() {
       hudFrame.current = 0;
       game.dispose();
       gameRef.current = null;
+      if (import.meta.env.DEV) delete (window as unknown as { __game?: Game }).__game;
       setGameReady(false);
     };
     // The game owns its own loop; only a car or phase change rebuilds it.
@@ -121,6 +180,13 @@ export default function App() {
     gameRef.current?.setPaused(paused);
   }, [paused, lapResult]);
 
+  useEffect(() => {
+    // While any dialog is up, drive keys stop capturing so Space/Enter can
+    // operate the dialog buttons again.
+    const g = gameRef.current;
+    if (g) g.input.captureEnabled = !paused && !lapResult;
+  }, [paused, lapResult, gameReady]);
+
   const startDriving = useCallback(() => {
     setHud(EMPTY_HUD);
     setLapResult(null);
@@ -139,6 +205,14 @@ export default function App() {
     setPaused(false);
     gameRef.current?.setPaused(false);
   }, []);
+
+  if (fatal !== null) {
+    return (
+      <div className="app">
+        <FatalScreen message={fatal} />
+      </div>
+    );
+  }
 
   if (phase === 'menu') {
     return (

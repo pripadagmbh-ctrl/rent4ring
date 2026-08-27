@@ -9,6 +9,13 @@ export type CameraMode = 'chase' | 'bonnet' | 'cockpit';
 export class InputManager {
   readonly state: DriveInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 
+  /**
+   * While a dialog (pause, ceremony) owns the screen this is false: drive
+   * keys are ignored and — crucially — not preventDefault-ed, so Space and
+   * Enter reach the dialog's buttons again. Escape stays live to unpause.
+   */
+  captureEnabled = true;
+
   private keys = new Set<string>();
   private steerSmooth = 0;
   private throttleSmooth = 0;
@@ -24,6 +31,10 @@ export class InputManager {
 
   private readonly handleDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
+    if (!this.captureEnabled) {
+      if (k === 'escape') this.onPause?.();
+      return;
+    }
     if (CONSUMED.has(k) || CONSUMED.has(e.code)) e.preventDefault();
     if (this.keys.has(k)) return;
     this.keys.add(k);
@@ -73,8 +84,14 @@ export class InputManager {
     return names.some((n) => this.keys.has(n));
   }
 
+  private padPauseHeld = false;
+
   update(dt: number): DriveInput {
     const pad = readGamepad();
+
+    // Start/Options on the pad toggles pause, edge-triggered.
+    if (pad?.pausePressed && !this.padPauseHeld) this.onPause?.();
+    this.padPauseHeld = pad?.pausePressed ?? false;
 
     let throttleRaw = this.held('w', 'arrowup') ? 1 : 0;
     let brakeRaw = this.held('s', 'arrowdown') ? 1 : 0;
@@ -146,18 +163,28 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-function readGamepad(): { throttle: number; brake: number; steer: number; handbrake: boolean } | null {
+function readGamepad(): {
+  throttle: number;
+  brake: number;
+  steer: number;
+  handbrake: boolean;
+  pausePressed: boolean;
+} | null {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
   const pads = navigator.getGamepads();
-  for (const pad of pads) {
-    if (!pad) continue;
-    const deadzone = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
-    return {
-      throttle: pad.buttons[7]?.value ?? 0,
-      brake: pad.buttons[6]?.value ?? 0,
-      steer: deadzone(pad.axes[0] ?? 0),
-      handbrake: pad.buttons[0]?.pressed ?? false,
-    };
-  }
-  return null;
+  // Prefer a pad the browser has normalised to the standard layout — the
+  // button numbers below are only meaningful there. Fall back to the first
+  // connected pad rather than none: better a slightly odd mapping than a
+  // controller that does nothing at all.
+  const pad =
+    [...pads].find((p) => p && p.mapping === 'standard') ?? [...pads].find((p) => p != null) ?? null;
+  if (!pad) return null;
+  const deadzone = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
+  return {
+    throttle: pad.buttons[7]?.value ?? 0,
+    brake: pad.buttons[6]?.value ?? 0,
+    steer: deadzone(pad.axes[0] ?? 0),
+    handbrake: pad.buttons[0]?.pressed ?? false,
+    pausePressed: pad.buttons[9]?.pressed ?? false,
+  };
 }
