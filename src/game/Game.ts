@@ -577,10 +577,27 @@ export class Game {
     }
 
     if (v > 4) {
-      this.setMood('angry', pick(ANGRY_LINES), 5);
+      this.setMood('angry', pick(this.ranting.angry), 5);
     } else if (this.mood !== 'angry') {
-      this.setMood('angry', 'Careful! That Armco is solid steel, you know.', 3.5);
+      this.setMood(
+        'angry',
+        this.car.bike
+          ? 'Careful, Mueller. That Armco is solid steel and you know it.'
+          : 'Careful! That Armco is solid steel, you know.',
+        3.5,
+      );
     }
+  }
+
+  /**
+   * On the bike he is the rider, so there is nobody to blame but himself and
+   * the whole commentary flips. One accessor, so the anger and the black-flag
+   * rant can never disagree about who is at fault.
+   */
+  private get ranting(): { angry: string[]; retired: string[] } {
+    return this.car.bike
+      ? { angry: SELF_ANGRY_LINES, retired: SELF_RETIRED_LINES }
+      : { angry: ANGRY_LINES, retired: RETIRED_LINES };
   }
 
   // ---------------------------------------------------------- retirement
@@ -601,7 +618,7 @@ export class Game {
     // watching the wreck sit there and get collected, so it comes back.
     this.cameraMode = 'chase';
     this.carMesh.group.visible = true;
-    this.setMood('angry', RETIRED_LINES[0], 99);
+    this.setMood('angry', this.ranting.retired[0], 99);
     // Engine off — the car is not going anywhere under its own power again.
     this.audio.update(0, 0, 0, 0);
 
@@ -627,13 +644,11 @@ export class Game {
     this.vehicle.position.addScaledVector(this.vehicle.forward, this.vehicle.vLong * dt);
 
     // One line at a time, so it reads as a rant rather than a wall of text.
-    const wanted = Math.min(
-      RETIRED_LINES.length - 1,
-      Math.floor(this.retiredFor / RETIRED_LINE_SECONDS),
-    );
+    const rant = this.ranting.retired;
+    const wanted = Math.min(rant.length - 1, Math.floor(this.retiredFor / RETIRED_LINE_SECONDS));
     if (wanted !== this.retiredLine) {
       this.retiredLine = wanted;
-      this.setMood('angry', RETIRED_LINES[wanted], 99);
+      this.setMood('angry', rant[wanted], 99);
     }
 
     if (truck) {
@@ -657,7 +672,7 @@ export class Game {
 
     this.updateMood(dt);
 
-    if (!this.retiredReported && this.retiredFor >= RETIRED_LINES.length * RETIRED_LINE_SECONDS) {
+    if (!this.retiredReported && this.retiredFor >= rant.length * RETIRED_LINE_SECONDS) {
       this.retiredReported = true;
       this.callbacks.onRetired({
         damageCost: Math.round(this.damageCost),
@@ -1303,6 +1318,13 @@ const ANGRY_LINES = [
   'Deep breaths, Müller. Deep breaths. Think of the deposit.',
   'The steering wheel. Round thing, right in front of you. USE it.',
   'That crunch was not the gearbox. That was my heart.',
+  'Marvellous. That will buff out, will it? It will not.',
+  'I could have hired that car to somebody careful.',
+  'Every panel on that thing has a price and I know all of them.',
+  'You are not driving it, you are redecorating it.',
+  'Stop. Just for one corner. Stop.',
+  'The barrier does not move. It has never once moved.',
+  'Do you want me to send the truck now or after the next one?',
 ];
 
 /** Off in the grass, chewing his knuckles. */
@@ -1321,6 +1343,12 @@ const SCARED_LINES = [
   'Both hands on the wheel! BOTH of them!',
   'There is a lawn mower for that, you know.',
   'If this ends badly, tell my fleet I loved them.',
+  'Careful. Careful careful careful.',
+  'That is enough of that, thank you.',
+  'My heart, driver. Consider my heart.',
+  'I felt that from here and I am sitting down.',
+  'Whoa! Give it a moment to settle.',
+  'You found the edge. Now leave it alone.',
 ];
 
 /** Resting commentary — one of these while nothing dramatic is happening. */
@@ -1333,6 +1361,16 @@ const IDLE_LINES = [
   'Textbook. Almost suspiciously textbook.',
   'My blood pressure thanks you.',
   'Tidy lines. The accountant is asleep. Perfect.',
+  'Steady now. The circuit is not going anywhere.',
+  'Nice and smooth. Smooth is what gets a car home.',
+  'Eyes up. Look through the corner, not at the bonnet.',
+  'Breathe. It is twenty kilometres, not twenty seconds.',
+  'You are doing fine. I have watched far worse from this chair.',
+  'One corner at a time. That is the whole secret, really.',
+  'Feel the road through the wheel. It is telling you things.',
+  'No need to hurry the entry. The exit is where the time lives.',
+  'Right foot is not a switch. Roll onto it.',
+  'That is it. Tidy. Boring, even. Boring is quick.',
 ];
 
 const FLOW_LINES = [
@@ -1340,6 +1378,14 @@ const FLOW_LINES = [
   'Oh, now you are driving. Keep that up.',
   'Proper job! The tyres are singing, not screaming.',
   'Beautiful. Like it is on rails. MY rails, mind.',
+  'Now you have it. That is the rhythm — do not think about it.',
+  'Look at that. Someone has been paying attention.',
+  'Yes! That is exactly what the car wants.',
+  'Smooth hands, quiet car, quick lap. Textbook.',
+  'I could watch that all afternoon. Keep going.',
+  'You are carrying speed now instead of chasing it.',
+  'That is the line. That is genuinely the line.',
+  'Whatever you just did — do it again at the next one.',
 ];
 
 /**
@@ -1374,6 +1420,35 @@ function recordBan(): number {
     return 1;
   }
 }
+
+/**
+ * On the Ducati there is no customer to shout at — he is riding it himself.
+ * So the rant turns inward, which is funnier and, by his own account,
+ * entirely deserved.
+ */
+const SELF_ANGRY_LINES = [
+  'MUELLER! What in the name of God was that?',
+  'Twenty-six years. Twenty-six years and I still do that.',
+  'Right. That is coming out of my own wages. Wonderful.',
+  'I would sack me. I genuinely would sack me.',
+  'Do not look at me like that. ...I am talking to myself again.',
+  'That was my fault. Say it out loud, Mueller. That was my fault.',
+  'If a customer did that I would have the truck out by now.',
+  'And to think I lecture people about this exact corner.',
+];
+
+/** The self-directed version of the black-flag rant, for the same reason. */
+const SELF_RETIRED_LINES = [
+  'BLACK FLAG. On myself. Marvellous.',
+  'Look at it. My bike. MY bike.',
+  'And there is nobody to blame. I have checked. Twice.',
+  'I am calling my own truck. The shame of it.',
+  'Twenty-six years I have run this yard, and I do this on a Tuesday.',
+  'The Armco is fine. It always is. It has had the practice.',
+  'Do not tell the dog. He will only give me that look.',
+  'Up on the deck with it, before I have to look at it any longer.',
+  'And I am banning myself. For life. ...I will be in at eight.',
+];
 
 const RETIRED_LINES = [
   'BLACK FLAG! Off. Now. You are done.',

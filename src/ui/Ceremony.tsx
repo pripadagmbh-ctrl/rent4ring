@@ -4,6 +4,7 @@ import type { LapResult } from '../game/Game';
 import { formatLap } from './format';
 import Gorilla from './Gorilla';
 import Logo from './Logo';
+import CardReader from './CardReader';
 
 interface Props {
   car: Car;
@@ -173,6 +174,12 @@ export default function Ceremony({ car, result, onContinue, onGarage }: Props) {
             </div>
             <div className="stat__label">Damage bill</div>
           </div>
+        </div>
+
+        {/* Settling up: the deposit hold comes off, the bill goes on. He runs
+            the card himself on the way back in, same as on the way out. */}
+        <div className="ceremony__settle">
+          <CardReader mode="settle" />
         </div>
 
         {/* --------------------------------------------------- discount ladder */}

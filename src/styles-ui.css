@@ -1789,3 +1789,206 @@
     margin-left: 0;
   }
 }
+
+/* ========================================================== card reader */
+.cardreader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.cardreader__stage {
+  position: relative;
+  width: 230px;
+  height: 132px;
+}
+
+/* The terminal: slot on top, screen, keypad. */
+.cardreader__terminal {
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  width: 96px;
+  height: 126px;
+  background: linear-gradient(160deg, #2a2f35, #14181d);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 9px 9px 8px;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.55);
+}
+
+.cardreader__slot {
+  position: absolute;
+  top: -4px;
+  left: 14px;
+  right: 14px;
+  height: 7px;
+  background: #05070a;
+  border-radius: 3px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.9);
+}
+
+.cardreader__screen {
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: #0c2f22;
+  color: #6cf3b0;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 0 4px;
+}
+
+.cardreader__screen.is-bad {
+  background: #350d12;
+  color: #ff8a90;
+}
+
+.cardreader__keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.cardreader__keys span {
+  height: 13px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+/* The card itself. */
+.cardreader__card {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  width: 118px;
+  height: 74px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4c7f6b, #2c5a4a 55%, #1d3f34);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
+  padding: 8px 9px;
+  color: #eaf3ee;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.cardreader__brand {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+
+.cardreader__chip {
+  display: block;
+  width: 20px;
+  height: 15px;
+  margin: 7px 0 6px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #f5d98a, #c9a227);
+}
+
+.cardreader__number {
+  display: block;
+}
+
+/* Swipe: across, into the slot, and back out. */
+.cardreader__card.is-swiping {
+  animation: card-swipe 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes card-swipe {
+  0% {
+    transform: translate(0, 0) rotate(-3deg);
+  }
+  22% {
+    transform: translate(78px, -14px) rotate(0deg);
+  }
+  38%,
+  58% {
+    transform: translate(96px, -26px) rotate(0deg) scaleY(0.55);
+  }
+  78% {
+    transform: translate(78px, -8px) rotate(0deg) scaleY(1);
+  }
+  100% {
+    transform: translate(2px, 4px) rotate(-2deg);
+  }
+}
+
+/* Kept: it goes down into the pocket instead of coming back to you. */
+.cardreader__card.is-pocketed {
+  animation: card-pocket 1.5s cubic-bezier(0.5, 0, 0.7, 1) forwards;
+}
+
+@keyframes card-pocket {
+  0% {
+    transform: translate(96px, -26px) scaleY(0.55);
+  }
+  30% {
+    transform: translate(70px, -6px) scaleY(1) rotate(-4deg);
+  }
+  100% {
+    transform: translate(-6px, 66px) scale(0.7) rotate(-22deg);
+    opacity: 0;
+  }
+}
+
+/* Suggestion of a trouser pocket at the bottom left. */
+.cardreader__pocket {
+  position: absolute;
+  left: -6px;
+  bottom: -6px;
+  width: 74px;
+  height: 34px;
+  border-radius: 4px 4px 12px 12px;
+  background: linear-gradient(#2b3444, #1b2230);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top-width: 3px;
+  border-top-color: rgba(255, 255, 255, 0.22);
+}
+
+.cardreader__note {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.cardreader--kept .cardreader__note {
+  color: var(--red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardreader__card.is-swiping,
+  .cardreader__card.is-pocketed {
+    animation: none;
+  }
+  .cardreader__card.is-pocketed {
+    opacity: 0;
+  }
+}
+
+/* The settlement swipe sits between the figures and the voucher. */
+.ceremony__settle {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 18px;
+}
+
+/* The deposit dialog on the way out of the garage. */
+.swipe-dialog {
+  text-align: center;
+}
+
+.swipe-dialog .cardreader {
+  margin-top: 6px;
+}
