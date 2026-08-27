@@ -2328,3 +2328,47 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ========================================================== powered by */
+.poweredby {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.poweredby:hover {
+  opacity: 0.9;
+}
+
+.poweredby__label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+/* The artwork is near-black on transparent; on this background it has to be
+   flipped to white. brightness(0) first flattens it to solid black so the
+   invert lands on a clean white, whatever the source greys were. */
+.poweredby__logo {
+  height: 17px;
+  width: auto;
+  display: block;
+  filter: brightness(0) invert(1);
+}
+
+/* Sits beside the mark and carries the legal form the horizontal artwork
+   leaves off; becomes the whole name if the image cannot load. */
+.poweredby__name {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 10px;
+  color: var(--muted);
+}
+

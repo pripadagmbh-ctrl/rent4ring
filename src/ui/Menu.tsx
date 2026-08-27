@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
+import PoweredBy from './PoweredBy';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -111,6 +112,7 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
           Circuit geometry derived from {trackData.source}. Road approach routed from the OSM street network.
           Unofficial fan project, not affiliated with Nürburgring 1927 GmbH &amp; Co. KG.
         </p>
+        <PoweredBy />
       </div>
     </div>
   );
