@@ -220,7 +220,12 @@ export default function Garage({
             />
             {/* His barbet, sitting at heel. Bottom-aligned with him by the
                 flex row, so they share a floor line. */}
-            <Barbet className="showroom__dog" />
+            <div className="showroom__dog-wrap">
+              <span className="showroom__dog-bark" aria-hidden="true">
+                Wuff! Wuff!
+              </span>
+              <Barbet className="showroom__dog" />
+            </div>
           </div>
         </div>
 
