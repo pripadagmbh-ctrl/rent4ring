@@ -12,6 +12,7 @@ import { Vehicle, type VehicleTelemetry } from './physics';
 import { buildWorld, buildApproachWorld, buildSky, type WorldHandles } from './world';
 import { type CarMesh } from './carMesh';
 import { buildVehicleMesh } from './vehicleMesh';
+import { buildTowTruck, type TowTruck } from './towTruck';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -44,7 +45,16 @@ export interface LapResult {
  * `departure` is the scripted roll out of the yard — the car drives itself and
  * the HUD presents it as part of the approach.
  */
-export type Phase = 'departure' | 'approach' | 'outlap' | 'timing';
+export type Phase = 'departure' | 'approach' | 'outlap' | 'timing' | 'retired';
+
+/** Handed to the UI when the damage bar fills and the drive is over. */
+export interface Retirement {
+  /** Repair bill at the moment of the flag, euros. */
+  damageCost: number;
+  contacts: number;
+  /** How many times this browser has now been thrown out. */
+  banCount: number;
+}
 
 export interface HudState {
   phase: Phase;
@@ -116,6 +126,8 @@ interface GhostSample {
 export interface GameCallbacks {
   onHud(state: HudState): void;
   onLapComplete(result: LapResult): void;
+  /** The damage bar filled: black flag, recovery truck, and out. */
+  onRetired(result: Retirement): void;
   /**
    * The send-off Herr Müller gave in the garage. Starting straight from the
    * menu skips the garage, so the drive picks its own when this is absent.
@@ -187,6 +199,14 @@ export class Game {
   private contacts = 0;
   private topSpeed = 0;
   private lastGear = 1;
+
+  // ---------------------------------------------------------- retirement
+  private towTruck: TowTruck | null = null;
+  private towFrom = new THREE.Vector3();
+  private towTo = new THREE.Vector3();
+  private retiredFor = 0;
+  private retiredLine = 0;
+  private retiredReported = false;
 
   // -------------------------------------------------------------- damage
   private damage = 0;
@@ -405,6 +425,10 @@ export class Game {
     for (const parked of this.parkedFleet) parked.dispose();
     this.parkedFleet = [];
     this.ghostMesh?.dispose();
+    // Only ever built if the drive ended under the black flag, but it holds
+    // its own geometries and materials like everything else here.
+    this.towTruck?.dispose();
+    this.towTruck = null;
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
     this.renderer.dispose();
@@ -482,6 +506,11 @@ export class Game {
       return;
     }
 
+    if (this.phase === 'retired') {
+      this.updateRetirement(dt);
+      return;
+    }
+
     if (this.countdown !== null) {
       this.countdown -= dt;
       if (this.countdown <= 0) {
@@ -542,10 +571,99 @@ export class Game {
     this.damage = Math.min(1, this.damage + v / 110);
     this.vehicle.condition = 1 - this.damage;
 
+    if (this.damage >= 1) {
+      this.retire();
+      return;
+    }
+
     if (v > 4) {
       this.setMood('angry', pick(ANGRY_LINES), 5);
     } else if (this.mood !== 'angry') {
       this.setMood('angry', 'Careful! That Armco is solid steel, you know.', 3.5);
+    }
+  }
+
+  // ---------------------------------------------------------- retirement
+  /**
+   * The damage bar is full. Control is taken away, the car is brought to a
+   * stop under the black flag, and the recovery truck comes out for it.
+   *
+   * Driven kinematically like the departure: the physics would keep fighting
+   * for the wheel, and there is nothing left to drive anyway.
+   */
+  private retire(): void {
+    if (this.phase === 'retired') return;
+    this.phase = 'retired';
+    this.retiredFor = 0;
+    this.retiredLine = 0;
+    this.input.captureEnabled = false;
+    // Bonnet and cockpit views hide the bodywork. The whole point now is
+    // watching the wreck sit there and get collected, so it comes back.
+    this.cameraMode = 'chase';
+    this.carMesh.group.visible = true;
+    this.setMood('angry', RETIRED_LINES[0], 99);
+    // Engine off — the car is not going anywhere under its own power again.
+    this.audio.update(0, 0, 0, 0);
+
+    // The truck comes up the road behind the wreck and stops just short.
+    const p = this.track.at(this.vehicle.trackIndex);
+    const truck = buildTowTruck();
+    truck.group.position.copy(p.pos).addScaledVector(p.tangent, -TOW_APPROACH_M);
+    truck.group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
+    this.scene.add(truck.group);
+    this.towTruck = truck;
+    this.towFrom = truck.group.position.clone();
+    this.towTo = p.pos.clone().addScaledVector(p.tangent, -6);
+  }
+
+  private updateRetirement(dt: number): void {
+    this.retiredFor += dt;
+    const truck = this.towTruck;
+
+    // The wreck rolls to a halt on its own; nobody is driving it any more.
+    this.vehicle.vLong *= Math.max(0, 1 - dt * 1.6);
+    this.vehicle.vLat *= Math.max(0, 1 - dt * 3);
+    this.vehicle.yawRate *= Math.max(0, 1 - dt * 3);
+    this.vehicle.position.addScaledVector(this.vehicle.forward, this.vehicle.vLong * dt);
+
+    // One line at a time, so it reads as a rant rather than a wall of text.
+    const wanted = Math.min(
+      RETIRED_LINES.length - 1,
+      Math.floor(this.retiredFor / RETIRED_LINE_SECONDS),
+    );
+    if (wanted !== this.retiredLine) {
+      this.retiredLine = wanted;
+      this.setMood('angry', RETIRED_LINES[wanted], 99);
+    }
+
+    if (truck) {
+      truck.update(this.retiredFor);
+      // Aim six metres behind the wreck itself, not behind where it was
+      // flagged — it coasts on for a good thirty metres after that. Taken
+      // from the car's own position and heading rather than its track index,
+      // because that index is only advanced inside Vehicle.step() and this
+      // sequence moves the car kinematically: the index stands still, and the
+      // truck parked in an empty stretch of road well short of it.
+      this.towTo.copy(this.vehicle.position).addScaledVector(this.vehicle.forward, -6);
+      truck.group.rotation.y = this.vehicle.yaw;
+      // Drive it in over the first stretch, then let it sit with the beacons
+      // going while he finishes telling you what he thinks.
+      const f = THREE.MathUtils.clamp(this.retiredFor / TOW_ARRIVE_SECONDS, 0, 1);
+      const eased = f * f * (3 - 2 * f);
+      truck.group.position.lerpVectors(this.towFrom, this.towTo, eased);
+      const roll = (this.towFrom.distanceTo(this.towTo) / TOW_ARRIVE_SECONDS) * dt;
+      if (f < 1) for (const w of truck.wheels) w.rotation.x -= roll / 0.45;
+    }
+
+    this.updateMood(dt);
+
+    if (!this.retiredReported && this.retiredFor >= RETIRED_LINES.length * RETIRED_LINE_SECONDS) {
+      this.retiredReported = true;
+      this.callbacks.onRetired({
+        damageCost: Math.round(this.damageCost),
+        contacts: this.contacts,
+        banCount: recordBan(),
+      });
     }
   }
 
@@ -946,6 +1064,23 @@ export class Game {
       return { pos: this.departure.cameraAnchor.clone(), look, fov: 58 };
     }
 
+    // Retirement gets its own view. The chase camera sits about six metres
+    // behind the car — which is exactly where the recovery truck parks, so it
+    // ended up inside the cab, looking at the back of a red panel. Standing
+    // off to the side shows both vehicles and the flag instead.
+    if (this.phase === 'retired') {
+      const mid = v.position.clone();
+      if (this.towTruck) mid.lerp(this.towTruck.group.position, 0.5);
+      const pos = mid
+        .clone()
+        .addScaledVector(left, -9.5)
+        .addScaledVector(fwd, 4.5);
+      pos.y += 4.2;
+      const look = mid.clone();
+      look.y += 0.9;
+      return { pos, look, fov: 60 };
+    }
+
     if (this.cameraMode === 'chase') {
       const back = 6.4 + speedFactor * 2.2;
       const pos = v.position.clone().addScaledVector(fwd, -back);
@@ -1205,6 +1340,51 @@ const FLOW_LINES = [
   'Oh, now you are driving. Keep that up.',
   'Proper job! The tyres are singing, not screaming.',
   'Beautiful. Like it is on rails. MY rails, mind.',
+];
+
+/**
+ * What he says once the damage bar is full and the car is his problem. Read
+ * in order, not at random — it is one rant, and it escalates.
+ */
+/** How far back up the road the recovery truck appears, metres. */
+const TOW_APPROACH_M = 85;
+/** How long it takes to come up and stop behind the wreck. */
+const TOW_ARRIVE_SECONDS = 6;
+/** Dwell on each line of his rant. */
+const RETIRED_LINE_SECONDS = 2.6;
+
+/** localStorage: how many times this browser has been thrown out for good. */
+const BAN_KEY = 'r4r.bans';
+
+/**
+ * Records the ban and returns the running total.
+ *
+ * A plain integer under its own key — nothing existing is touched, so there
+ * is no format to migrate. Storage can be unavailable (private mode, a
+ * browser set to block it), and being unable to count bans is no reason to
+ * fail the sequence, so it falls back to "this is the first".
+ */
+function recordBan(): number {
+  try {
+    const n = Number.parseInt(localStorage.getItem(BAN_KEY) ?? '0', 10);
+    const next = (Number.isFinite(n) ? n : 0) + 1;
+    localStorage.setItem(BAN_KEY, String(next));
+    return next;
+  } catch {
+    return 1;
+  }
+}
+
+const RETIRED_LINES = [
+  'BLACK FLAG! Off. Now. You are done.',
+  'Look at it. LOOK at it. That was a car this morning.',
+  'Do not touch anything else. You have touched quite enough.',
+  'I am calling the truck. No, you do not get a say.',
+  'Twenty-six years I have run this yard. Twenty-six.',
+  'The Armco is fine, by the way. It usually is. It has practice.',
+  'Out. Mind the oil. That is yours as well.',
+  'Right — up on the deck with it, before it leaks on my tarmac.',
+  'And you: banned. For life. Do not write to me about it.',
 ];
 
 function pick(list: string[]): string {
