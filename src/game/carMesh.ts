@@ -459,7 +459,7 @@ function softSign(u: number, k: number): number {
  * `halfWidth(t)`, `bottom(t)` and `top(t)` shape each station. `roundness`
  * < 1 softens the corners; `span` restricts the sweep to part of the car.
  */
-function loft(
+export function loft(
   length: number,
   halfWidth: (t: number) => number,
   bottom: (t: number) => number,
@@ -531,7 +531,7 @@ function loft(
 }
 
 /** Piecewise-smooth profile through [t, value] control points (cosine eased). */
-function curve(points: [number, number][]): (t: number) => number {
+export function curve(points: [number, number][]): (t: number) => number {
   return (t: number) => {
     if (t <= points[0][0]) return points[0][1];
     for (let i = 0; i < points.length - 1; i++) {
