@@ -54,8 +54,26 @@ export const PLATEAU = { minX: 19, maxX: 26, minZ: 8, maxZ: 24 };
 /** Street-level lane running back from the turning head to the junction. */
 export const LINK = { minX: -9.5, maxX: 20, minZ: 17.5, maxZ: 25.5 };
 
-/** Where the camera stands to watch the car come out of the shed. */
-export const CAMERA_ANCHOR = new THREE.Vector3(6.5, 3.0, 14.0);
+/**
+ * Where the camera stands to watch the car come out of the shed, up the ramp
+ * and round the U-turn. Two earlier positions were both diagnosed by pixel-
+ * sampling the actual render, not just checking clearance:
+ *
+ *   (6.5, 3.0, 14.0) sat close enough beside the OPEN_DOOR opening (centred
+ *   x=1.4, 5.2 m wide) that the sightline to the car grazed the frontage
+ *   wall a few metres away — that wall alone filled almost the whole frame.
+ *
+ *   (3.0, 2.4, 12.0) squared up to the door but was still close enough,
+ *   looking almost straight into the (dim) interior, that the surrounding
+ *   shed wall dominated the frame at any point along the ramp/U-turn — not
+ *   an exposure bug, just a shot with nothing in it but flat wall.
+ *
+ * Pulled back onto the LEFT side of the yard (x=-9, the side the departure
+ * choreography never touches) and further out (z=13.5): a proper 3/4
+ * establishing shot of the whole frontage — signage, both doors, sky and
+ * yard all in frame — that stays clear through the ramp and U-turn too.
+ */
+export const CAMERA_ANCHOR = new THREE.Vector3(-9.0, 3.6, 13.5);
 
 /** Approach index the scripted drive hands over at. */
 const HANDOVER_INDEX = 6;

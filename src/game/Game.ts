@@ -905,9 +905,13 @@ export class Game {
     const speedFactor = Math.min(Math.abs(v.vLong) / 90, 1);
 
     // The departure opens on a fixed yard camera watching the car leave the
-    // shed; once it swings towards the ramp, the normal chase takes over and
-    // the position lerp carries the cut smoothly.
-    if (this.phase === 'departure' && this.departureS / this.departure.length < 0.17) {
+    // shed, up the ramp and round the U-turn — that whole manoeuvre happens
+    // within a few metres of the retaining walls, where a vehicle-relative
+    // chase camera would constantly clip through them. Only once the car is
+    // running straight down the link lane (u >= 0.42, the same break as
+    // departureSpeedAt's ramp/link-lane split) is there enough clearance for
+    // the normal chase to take over; the position lerp carries the cut smoothly.
+    if (this.phase === 'departure' && this.departureS / this.departure.length < 0.42) {
       const look = v.position.clone();
       look.y += 0.8;
       return { pos: this.departure.cameraAnchor.clone(), look, fov: 58 };
