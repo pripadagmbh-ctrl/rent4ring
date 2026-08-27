@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Car } from '../data/fleet';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
+import Customer from './Customer';
 
 interface Props {
   car: Car;
@@ -102,14 +103,10 @@ export default function BanScene({ car, onDone }: Props) {
       <div className="banscene__mueller">
         <Gorilla mood="angry" gesture={current.stage === 'treat' ? 'thumb' : 'point'} />
       </div>
-      {/* The customer, as a figure rather than a shape — a blob being punted
-          reads as a bin bag, and the joke needs a person. */}
-      <div className="banscene__customer" aria-hidden="true">
-        <span className="banscene__customer-head" />
-        <span className="banscene__customer-body" />
-        <span className="banscene__customer-leg banscene__customer-leg--l" />
-        <span className="banscene__customer-leg banscene__customer-leg--r" />
-        <span className="banscene__customer-arm" />
+      {/* The customer himself. Boxes could not carry it — you could not tell
+          what was being punted, which is the one thing the shot has to sell. */}
+      <div className="banscene__customer">
+        <Customer />
       </div>
       {/* Sells the punt: a streak where he went. */}
       <div className="banscene__swoosh" aria-hidden="true" />

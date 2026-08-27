@@ -2255,86 +2255,36 @@
   transition: left 1.4s ease-in, opacity 1.4s;
 }
 
-/* The customer, built from parts so a punt actually reads as a person going
-   over rather than a bag being thrown. */
+/* The customer. Sized against Herr Müller so the difference in build reads
+   at a glance: taller, half the width of him. */
 .banscene__customer {
   position: absolute;
-  left: 46%;
-  bottom: 9%;
-  width: 26px;
-  height: 46px;
+  left: 45%;
+  bottom: 8%;
+  width: 62px;
   transition: all 0.8s ease-in-out;
 }
 
-.banscene__customer span {
-  position: absolute;
+.banscene__customer svg {
+  display: block;
+  width: 100%;
 }
 
-.banscene__customer-head {
-  left: 6px;
-  top: 0;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #d8c3ab;
-}
-
-.banscene__customer-body {
-  left: 4px;
-  top: 13px;
-  width: 18px;
-  height: 20px;
-  border-radius: 5px 5px 3px 3px;
-  background: linear-gradient(#c8563f, #9c3f2e);
-}
-
-.banscene__customer-leg {
-  top: 32px;
-  width: 6px;
-  height: 14px;
-  border-radius: 2px;
-  background: #2b3340;
-}
-
-.banscene__customer-leg--l {
-  left: 6px;
-}
-
-.banscene__customer-leg--r {
-  left: 14px;
-}
-
-.banscene__customer-arm {
-  left: 0;
-  top: 15px;
-  width: 6px;
-  height: 15px;
-  border-radius: 3px;
-  background: #d8c3ab;
-  transform-origin: top center;
-  transition: transform 0.5s;
-}
-
-/* Carried: tucked under one arm, horizontal. */
+/* Carried: tucked under one arm, horizontal and not enjoying it. */
 .banscene--carry .banscene__customer,
 .banscene--wind .banscene__customer {
-  left: 37%;
-  bottom: 25%;
-  transform: rotate(80deg);
-}
-
-.banscene--carry .banscene__customer-arm,
-.banscene--wind .banscene__customer-arm {
-  transform: rotate(-120deg);
+  left: 34%;
+  bottom: 24%;
+  transform: rotate(82deg);
 }
 
 /* The punt: up and away over the roofs, towards the castle. */
 .banscene--kick .banscene__customer,
 .banscene--treat .banscene__customer,
 .banscene--inside .banscene__customer {
-  left: 13%;
-  bottom: 68%;
-  transform: rotate(430deg) scale(0.45);
+  left: 11%;
+  bottom: 66%;
+  transform: rotate(430deg) scale(0.4);
   opacity: 0;
   transition: all 2.2s cubic-bezier(0.2, -0.4, 0.6, 1);
 }
