@@ -278,6 +278,36 @@
   flex: none;
 }
 
+/* The barbet sits at his heel. Roughly half his height, which is about right
+   for a 55 cm dog beside a silverback, and bottom-aligned by the flex row so
+   they stand on the same floor. */
+.showroom__dog {
+  width: clamp(58px, 7.7vw, 86px);
+  flex: none;
+  margin-left: -6px;
+}
+
+.barbet__tail {
+  transform-origin: 128px 148px;
+  animation: barbet-wag 1.9s ease-in-out infinite;
+}
+
+@keyframes barbet-wag {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barbet__tail {
+    animation: none;
+  }
+}
+
 .showroom__mueller-speech {
   max-width: 232px;
   background: #fff;

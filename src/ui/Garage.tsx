@@ -5,6 +5,7 @@ import { farewellLine, garageLines, type MuellerLine } from '../data/muellerLine
 import { formatLap } from './format';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
+import Barbet from './Barbet';
 import trackData from '../data/nordschleife.json';
 import approachData from '../data/approach.json';
 
@@ -217,6 +218,9 @@ export default function Garage({
               talking
               className="showroom__mueller-fig"
             />
+            {/* His barbet, sitting at heel. Bottom-aligned with him by the
+                flex row, so they share a floor line. */}
+            <Barbet className="showroom__dog" />
           </div>
         </div>
 
