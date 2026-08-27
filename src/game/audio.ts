@@ -1,4 +1,5 @@
 import type { Car } from '../data/fleet';
+import { getAudioContext, unlockAudio } from './audioContext';
 
 /**
  * Synthesised engine note. ICE cars get a stack of sawtooth harmonics tied to
@@ -39,15 +40,18 @@ export class EngineAudio {
   }
 
   private async boot(): Promise<void> {
-    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return;
-    const ctx = new Ctor();
+    // Borrow the app-wide context that the first user gesture unlocked
+    // (see audioContext.ts). Building one here instead would be too late for
+    // mobile Safari: by the time a drive starts, the gesture that allowed
+    // audio is several async hops in the past.
+    const ctx = getAudioContext() ?? unlockAudio();
+    if (!ctx) return;
     this.ctx = ctx;
     if (ctx.state === 'suspended') await ctx.resume();
     // dispose() may have run while resume() was pending (StrictMode's
-    // double-mount does exactly this) — abandon the half-built graph.
+    // double-mount does exactly this) — abandon the half-built graph. The
+    // context is shared, so it is never closed here, only let go of.
     if (this.disposed) {
-      void ctx.close().catch(() => undefined);
       this.ctx = null;
       return;
     }
@@ -237,12 +241,14 @@ export class EngineAudio {
 
   dispose(): void {
     this.disposed = true;
-    for (const { osc } of this.oscillators) {
+    for (const { osc, gain } of this.oscillators) {
       try {
         osc.stop();
       } catch {
         /* already stopped */
       }
+      osc.disconnect();
+      gain.disconnect();
     }
     this.oscillators = [];
     try {
@@ -250,7 +256,20 @@ export class EngineAudio {
     } catch {
       /* already stopped */
     }
-    void this.ctx?.close().catch(() => undefined);
+    // The context is shared across drives and must survive this one: closing
+    // it would silence every later drive, and on iOS it cannot be unlocked
+    // again without a fresh user gesture. So tear down only what this
+    // instance added, and hand the context back intact.
+    this.noise?.disconnect();
+    this.noiseGain?.disconnect();
+    this.filter?.disconnect();
+    this.master?.disconnect();
+    this.sfx?.disconnect();
+    this.noise = null;
+    this.noiseGain = null;
+    this.filter = null;
+    this.master = null;
+    this.sfx = null;
     this.ctx = null;
     this.started = false;
   }

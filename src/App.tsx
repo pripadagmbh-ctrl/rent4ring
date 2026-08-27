@@ -2,6 +2,7 @@ import { Component, useCallback, useEffect, useRef, useState, type ReactNode } f
 import { FLEET, type Car } from './data/fleet';
 import type { MuellerLine } from './data/muellerLines';
 import { Game, type HudState, type LapResult } from './game/Game';
+import { listenForAudioUnlock } from './game/audioContext';
 import Menu from './ui/Menu';
 import Garage from './ui/Garage';
 import Hud from './ui/Hud';
@@ -113,6 +114,10 @@ function AppInner() {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
+
+  // Mobile Safari only unlocks audio from inside a user gesture, so claim the
+  // very first one — long before a drive (and its EngineAudio) exists.
+  useEffect(() => listenForAudioUnlock(), []);
 
   useEffect(() => {
     if (phase !== 'driving' || !canvasRef.current) return;

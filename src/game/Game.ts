@@ -15,7 +15,8 @@ import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
-import { departureRoute, departureSpeedAt, type DepartureRoute } from './departure';
+import { departureRoute, departureSpeedAt, fleetParkingSpots, type DepartureRoute } from './departure';
+import { FLEET } from '../data/fleet';
 
 export interface SectorSplit {
   name: string;
@@ -143,6 +144,8 @@ export class Game {
   private world: WorldHandles;
   private approachWorld: WorldHandles;
   private carMesh: CarMesh;
+  /** The rest of the fleet, parked in the yard as scenery. */
+  private parkedFleet: CarMesh[] = [];
   private ghostMesh: CarMesh | null = null;
 
   private cameraMode: CameraMode = 'chase';
@@ -280,6 +283,23 @@ export class Game {
     });
     this.scene.add(this.carMesh.group);
 
+    // The rest of the fleet, parked on the apron beside the ramp. The car
+    // being driven is left out — its bay is the empty one in the row. Built
+    // here rather than in world.ts because carMesh already imports from
+    // there, and world importing it back would close an import cycle.
+    const parked = FLEET.filter((c) => c.id !== car.id);
+    const spots = fleetParkingSpots(this.approach, parked.length);
+    parked.forEach((other, i) => {
+      const mesh = buildCarMesh(other);
+      mesh.group.position.copy(spots[i].position);
+      mesh.group.rotation.y = spots[i].yaw;
+      mesh.group.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+      });
+      this.scene.add(mesh.group);
+      this.parkedFleet.push(mesh);
+    });
+
     // ------------------------------------------------------ post-processing
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -375,6 +395,8 @@ export class Game {
     this.world.dispose();
     this.approachWorld.dispose();
     this.carMesh.dispose();
+    for (const parked of this.parkedFleet) parked.dispose();
+    this.parkedFleet = [];
     this.ghostMesh?.dispose();
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
