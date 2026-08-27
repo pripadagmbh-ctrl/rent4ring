@@ -131,6 +131,17 @@ export function buildCrowd(): Crowd {
     group.add(person);
   }
 
+  // Tanju, on his bagger at the end of the line. Included with his
+  // permission, and drawn the way everyone else here is drawn: the
+  // recognisable things — the beard, the half lid and shades, the white tee
+  // and shorts, and above all that long black tourer — rather than a
+  // likeness, which would sit oddly against low-poly gorillas anyway.
+  const tanju = buildTanju(keep);
+  tanju.group.position.set(1.6, 0, 8.4);
+  tanju.group.rotation.y = -0.85;
+  group.add(tanju.group);
+  wavers.push({ arm: tanju.arm, phase: 1.25 });
+
   return {
     group,
     update(t: number) {
@@ -147,4 +158,117 @@ export function buildCrowd(): Crowd {
       disposables.length = 0;
     },
   };
+}
+
+
+/**
+ * A long black bagger with its rider aboard: frame-mounted fairing, twin
+ * headlights, hard panniers and a top box. Same local frame as everything
+ * else — +z forward, ground at y = 0.
+ */
+function buildTanju(keep: <T extends { dispose(): void }>(x: T) => T): {
+  group: THREE.Group;
+  arm: THREE.Object3D;
+} {
+  const group = new THREE.Group();
+  const black = keep(new THREE.MeshStandardMaterial({ color: 0x121417, roughness: 0.32, metalness: 0.55 }));
+  const matte = keep(new THREE.MeshStandardMaterial({ color: 0x1b1e22, roughness: 0.7 }));
+  const chrome = keep(new THREE.MeshStandardMaterial({ color: 0xb8bec6, roughness: 0.22, metalness: 0.92 }));
+  const rubber = keep(new THREE.MeshStandardMaterial({ color: 0x17191b, roughness: 0.92 }));
+  const lamp = keep(new THREE.MeshBasicMaterial({ color: 0xe9f2ea }));
+  const tee = keep(new THREE.MeshStandardMaterial({ color: 0xecebe6, roughness: 0.8 }));
+  const skin = keep(new THREE.MeshStandardMaterial({ color: 0xc99a72, roughness: 0.8 }));
+  const shorts = keep(new THREE.MeshStandardMaterial({ color: 0x23272d, roughness: 0.8 }));
+  const shade = keep(new THREE.MeshStandardMaterial({ color: 0x0c0e11, roughness: 0.2, metalness: 0.5 }));
+
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, parent: THREE.Object3D = group) => {
+    const m = new THREE.Mesh(keep(geo), mat);
+    parent.add(m);
+    return m;
+  };
+
+  // ------------------------------------------------------------- the bike
+  const FRONT_Z = 0.86;
+  const REAR_Z = -0.74;
+  for (const [z, r, w] of [
+    [FRONT_Z, 0.33, 0.11],
+    [REAR_Z, 0.29, 0.19],
+  ]) {
+    const tyre = add(new THREE.CylinderGeometry(r, r, w, 22), rubber);
+    tyre.position.set(0, r, z);
+    tyre.rotation.z = Math.PI / 2;
+    const rim = add(new THREE.CylinderGeometry(r * 0.62, r * 0.62, w + 0.01, 16), black);
+    rim.position.set(0, r, z);
+    rim.rotation.z = Math.PI / 2;
+  }
+
+  // Long low body, engine, and the bags that make it a bagger.
+  const frame = add(new THREE.BoxGeometry(0.26, 0.24, 1.5), matte);
+  frame.position.set(0, 0.62, 0.02);
+  const motor = add(new THREE.BoxGeometry(0.42, 0.34, 0.44), chrome);
+  motor.position.set(0, 0.5, 0.06);
+  const tank = add(new THREE.BoxGeometry(0.3, 0.22, 0.5), black);
+  tank.position.set(0, 0.82, 0.28);
+  const seat = add(new THREE.BoxGeometry(0.3, 0.1, 0.44), matte);
+  seat.position.set(0, 0.78, -0.16);
+  for (const s of [-1, 1]) {
+    const bag = add(new THREE.BoxGeometry(0.16, 0.34, 0.62), black);
+    bag.position.set(s * 0.3, 0.62, -0.52);
+  }
+  const topBox = add(new THREE.BoxGeometry(0.46, 0.28, 0.4), black);
+  topBox.position.set(0, 0.98, -0.56);
+
+  // The batwing fairing and its twin lights, which is the whole silhouette.
+  const fairing = add(new THREE.BoxGeometry(0.62, 0.42, 0.22), black);
+  fairing.position.set(0, 1.02, 0.72);
+  const windshield = add(new THREE.BoxGeometry(0.5, 0.22, 0.04), shade);
+  windshield.position.set(0, 1.3, 0.7);
+  windshield.rotation.x = 0.22;
+  for (const s of [-1, 1]) {
+    const light = add(new THREE.BoxGeometry(0.17, 0.13, 0.05), lamp);
+    light.position.set(s * 0.15, 0.96, 0.84);
+  }
+  for (const s of [-1, 1]) {
+    const fork = add(new THREE.CylinderGeometry(0.028, 0.028, 0.62, 10), chrome);
+    fork.position.set(s * 0.1, 0.62, 0.82);
+    fork.rotation.x = -0.42;
+  }
+
+  // ------------------------------------------------------------ the rider
+  const torso = add(new THREE.BoxGeometry(0.42, 0.5, 0.26), tee);
+  torso.position.set(0, 1.18, -0.06);
+  torso.rotation.x = -0.16;
+  const head = add(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
+  head.position.set(0, 1.56, 0.02);
+  // Beard, and the half lid with shades under it.
+  const beard = add(new THREE.BoxGeometry(0.19, 0.11, 0.2), matte);
+  beard.position.set(0, 1.47, 0.04);
+  const lid = add(new THREE.SphereGeometry(0.16, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), black);
+  lid.position.set(0, 1.6, 0.02);
+  const shades = add(new THREE.BoxGeometry(0.2, 0.06, 0.04), shade);
+  shades.position.set(0, 1.58, 0.13);
+
+  // Legs forward onto the boards, in shorts.
+  for (const s of [-1, 1]) {
+    const thigh = add(new THREE.BoxGeometry(0.14, 0.15, 0.42), shorts);
+    thigh.position.set(s * 0.16, 0.8, 0.16);
+    const shin = add(new THREE.BoxGeometry(0.12, 0.34, 0.13), skin);
+    shin.position.set(s * 0.18, 0.58, 0.38);
+    shin.rotation.x = 0.3;
+    const boot = add(new THREE.BoxGeometry(0.13, 0.1, 0.24), tee);
+    boot.position.set(s * 0.18, 0.4, 0.52);
+  }
+
+  // Left hand on the bar; the right one comes off it to wave.
+  const barL = add(new THREE.BoxGeometry(0.1, 0.34, 0.11), skin);
+  barL.position.set(-0.26, 1.24, 0.42);
+  barL.rotation.x = -0.7;
+
+  const arm = new THREE.Object3D();
+  arm.position.set(0.24, 1.36, -0.02);
+  const upper = add(new THREE.BoxGeometry(0.1, 0.44, 0.11), skin, arm);
+  upper.position.y = -0.2;
+  group.add(arm);
+
+  return { group, arm };
 }

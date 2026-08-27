@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Car } from '../data/fleet';
 import Gorilla from './Gorilla';
 import Barbet from './Barbet';
+import Customer from './Customer';
 
 interface Props {
   car: Car;
@@ -83,6 +84,11 @@ export default function BanScene({ car, onDone }: Props) {
 
       <div className="banscene__yard" aria-hidden="true" />
 
+      {/* The shed they walk back into at the end. */}
+      <div className="banscene__shed" aria-hidden="true">
+        <span className="banscene__door" />
+      </div>
+
       {/* The recovery truck, reversing in with the wreck on the deck. */}
       <div className="banscene__truck">
         <div className="banscene__deck" />
@@ -97,7 +103,13 @@ export default function BanScene({ car, onDone }: Props) {
       <div className="banscene__mueller">
         <Gorilla mood="angry" gesture={current.stage === 'treat' ? 'thumb' : 'point'} />
       </div>
-      <div className="banscene__customer" />
+      {/* The customer himself. Boxes could not carry it — you could not tell
+          what was being punted, which is the one thing the shot has to sell. */}
+      <div className="banscene__customer">
+        <Customer />
+      </div>
+      {/* Sells the punt: a streak where he went. */}
+      <div className="banscene__swoosh" aria-hidden="true" />
       <div className="banscene__dog">
         <Barbet />
       </div>
