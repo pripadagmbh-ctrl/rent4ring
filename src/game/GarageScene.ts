@@ -353,7 +353,11 @@ export class GarageScene {
     // quarter from the bike's right — the side Ducati leaves bare, because
     // the single-sided swingarm is on the other one.
     const ducati = buildDucatiPanigale({ stand: true });
-    ducati.group.position.set(4.15, 0, -0.55);
+    // Brought forward from (4.15, -0.55): back there it sat 27 degrees off
+    // the camera axis, which put it on the very edge of the frame and tiny.
+    // Here it is 21 degrees off and nearer, so it actually reads — still
+    // clear of the 3.1 m dais and out of the car's way.
+    ducati.group.position.set(3.85, 0, 1.45);
     ducati.group.rotation.y = 1.0;
     this.scene.add(ducati.group);
     this.disposables.push(ducati);
