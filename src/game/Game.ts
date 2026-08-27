@@ -102,12 +102,16 @@ interface GhostSample {
 export interface GameCallbacks {
   onHud(state: HudState): void;
   onLapComplete(result: LapResult): void;
-  onArrived?(): void;
 }
 
+// The centreline data is immutable, and rebuilding ~3.500 smoothed points on
+// every drive start is pure waste — one shared instance serves every Game.
+let sharedTrack: Track | null = null;
+let sharedApproach: Approach | null = null;
+
 export class Game {
-  readonly track = new Track();
-  readonly approach = new Approach();
+  readonly track = (sharedTrack ??= new Track());
+  readonly approach = (sharedApproach ??= new Approach());
   readonly vehicle: Vehicle;
   readonly input = new InputManager();
   readonly audio: EngineAudio;
@@ -120,6 +124,7 @@ export class Game {
   private sun!: THREE.DirectionalLight;
   private sky!: THREE.Mesh;
   private skyDisposables: { dispose(): void }[] = [];
+  private envRT: THREE.WebGLRenderTarget | null = null;
   private lowPower = false;
   /** Adaptive quality: 0 = everything on, 1 = no bloom, 2 = no shadows. */
   private qualityTier = 0;
@@ -139,6 +144,7 @@ export class Game {
   private frame = 0;
   private clock = new THREE.Clock();
   private accumulator = 0;
+  private pausedFrames = 0;
 
   // ------------------------------------------------------------ lap state
   phase: Phase = 'approach';
@@ -204,12 +210,15 @@ export class Game {
 
     this.camera = new THREE.PerspectiveCamera(68, canvas.clientWidth / canvas.clientHeight, 0.3, 4000);
     // Fog blends into the sky's horizon band.
-    this.scene.fog = new THREE.Fog(0xc3d2de, 260, 1500);
+    this.scene.fog = new THREE.Fog(0xa9b4ae, 260, 1500);
 
-    // Environment reflections keep metallic paint reading as paint.
+    // Environment reflections keep metallic paint reading as paint. The
+    // render target owns the actual GPU texture — PMREMGenerator.dispose()
+    // does NOT free it, so it is kept for dispose().
     {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
-      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+      this.scene.environment = this.envRT.texture;
       this.scene.environmentIntensity = 0.4;
       pmrem.dispose();
     }
@@ -258,7 +267,7 @@ export class Game {
         new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
         0.32,
         0.5,
-        0.86,
+        0.9,
       );
       this.composer.addPass(this.bloomPass);
     }
@@ -273,8 +282,14 @@ export class Game {
     this.lastIndex = 0;
     this.moodLine = "Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.";
 
-    this.input.onCameraToggle = () => this.cycleCamera();
-    this.input.onReset = () => this.recover();
+    // Camera and recover must not fire while a dialog owns the screen —
+    // teleporting the car from inside the ceremony was possible before.
+    this.input.onCameraToggle = () => {
+      if (!this.paused) this.cycleCamera();
+    };
+    this.input.onReset = () => {
+      if (!this.paused) this.recover();
+    };
     this.input.attach();
 
     this.loadBest();
@@ -329,6 +344,7 @@ export class Game {
     this.ghostMesh?.dispose();
     this.composer.dispose();
     this.skyDisposables.forEach((d) => d.dispose());
+    this.envRT?.dispose();
     this.renderer.dispose();
   }
 
@@ -345,7 +361,10 @@ export class Game {
 
     const raw = this.clock.getDelta();
     if (this.paused) {
-      this.composer.render();
+      // The dialog's backdrop blur only needs a live frame now and then;
+      // rendering flat out in pause just warms phones and drains batteries.
+      this.pausedFrames = (this.pausedFrames + 1) % 30;
+      if (this.pausedFrames === 1) this.composer.render();
       return;
     }
 
@@ -465,7 +484,7 @@ export class Game {
 
   // ------------------------------------------------------------ approach
   private updateApproach(): void {
-    this.vehicle.trackIndex = this.approach.nearestIndex(this.vehicle.position, this.vehicle.trackIndex, 40);
+    this.vehicle.trackIndex = this.approach.nearestIndex(this.vehicle.position, this.vehicle.trackIndex, 240);
     if (this.vehicle.trackIndex >= this.approach.count - 3) {
       this.enterCircuit();
     }
@@ -485,7 +504,6 @@ export class Game {
     this.sectorTimes = [];
     this.sectorIndex = 0;
     this.setMood('cheer', "There she is. Over the line and the clock starts.", 5);
-    this.callbacks.onArrived?.();
     this.updateCameraImmediate();
   }
 
@@ -498,13 +516,20 @@ export class Game {
     if (delta < -n / 2) delta += n;
     this.lastIndex = idx;
 
+    // Time the car needed to cover the distance it is already PAST the line.
+    // Crossings land mid-step on a 6 m point grid, which quantised every lap
+    // to ~0.1 s; backing the overshoot out (and carrying it into the next
+    // lap) makes the clock line-accurate.
+    const overshootSeconds = (points: number) =>
+      (points * this.track.spacing) / Math.max(Math.abs(this.vehicle.vLong), 5);
+
     if (this.phase === 'outlap') {
       this.joinProgress += delta;
       const toLine = n - this.approach.joinIndex;
       if (this.joinProgress >= toLine) {
         this.phase = 'timing';
         this.lapProgress = this.joinProgress - toLine;
-        this.lapTime = 0;
+        this.lapTime = overshootSeconds(this.lapProgress);
         this.contacts = 0;
         this.topSpeed = 0;
         this.ghostRecording = [];
@@ -524,12 +549,17 @@ export class Game {
       this.sectorIndex++;
     }
 
-    if (this.lapProgress >= n) this.completeLap();
-    else if (this.lapProgress < -n * 0.05) this.lapProgress = 0;
+    if (this.lapProgress >= n) {
+      const overshoot = overshootSeconds(this.lapProgress - n);
+      const carryProgress = this.lapProgress - n;
+      this.completeLap(overshoot, carryProgress);
+    } else if (this.lapProgress < -n * 0.05) {
+      this.lapProgress = 0;
+    }
   }
 
-  private completeLap(): void {
-    const time = this.lapTime;
+  private completeLap(overshoot: number, carryProgress: number): void {
+    const time = Math.max(0, this.lapTime - overshoot);
     if (this.sectorTimes.length < SECTOR_BOUNDS.length) {
       this.sectorTimes.push({ name: SECTOR_BOUNDS[SECTOR_BOUNDS.length - 1].name, time });
     }
@@ -559,9 +589,10 @@ export class Game {
     this.audio.fanfare();
     this.callbacks.onLapComplete(result);
 
-    // Ready for another lap, straight from the line.
-    this.lapTime = 0;
-    this.lapProgress = 0;
+    // Ready for another lap, straight from the line — the stretch already
+    // driven past it belongs to the new lap, in time and in distance.
+    this.lapTime = overshoot;
+    this.lapProgress = carryProgress;
     this.sectorTimes = [];
     this.sectorIndex = 0;
     this.contacts = 0;
