@@ -60,6 +60,8 @@ export class Vehicle {
   condition = 1;
 
   private steerActual = 0;
+  /** Seconds of drive-torque cut still remaining after an upshift. */
+  private shiftCut = 0;
   private readonly telemetry: VehicleTelemetry = {
     speedKmh: 0,
     rpm: 0,
@@ -117,7 +119,7 @@ export class Vehicle {
     const Izz = mass * L * L * 0.18;
 
     // --- Track context -------------------------------------------------
-    this.trackIndex = road.nearestIndex(this.position, this.trackIndex, 40);
+    this.trackIndex = road.nearestIndex(this.position, this.trackIndex, 240);
     const tp = road.at(this.trackIndex);
     const lateral = road.lateralOffset(this.position, this.trackIndex);
     const absLateral = Math.abs(lateral);
@@ -183,10 +185,30 @@ export class Vehicle {
       const engineForce =
         (car.torqueNm * torqueFactor * gearRatio * car.finalDrive * DRIVELINE_EFFICIENCY) / WHEEL_RADIUS;
       // Power ceiling keeps low gears from producing silly force at speed.
-      const powerW = car.ps * 735.5;
+      // It is a wheel force, so the driveline loss applies here just as it
+      // does on the torque path — otherwise cars above the traction limit
+      // ran on crank power (~11% too strong).
+      const powerW = car.ps * 735.5 * DRIVELINE_EFFICIENCY;
       const powerForce = powerW / Math.max(Math.abs(this.vLong), 6);
       driveForce = Math.min(engineForce, powerForce) * input.throttle * (0.7 + 0.3 * this.condition);
+      // A gearchange interrupts drive. Without this every ICE car pulled
+      // 0-100 like a single-speed EV, roughly twice as quick as its data
+      // sheet — the tool run that exposed it lives in scripts/simulate.ts.
+      if (this.shiftCut > 0) driveForce *= 0.15;
+
+      // Launch control: no production car puts its full friction budget down
+      // from rest — the manufacturer's own 0-100 figure encodes how much the
+      // electronics actually allow. The cap HOLDS at ~1.25x the 0-100 average
+      // until ~45 km/h and only then blends out; releasing it linearly from
+      // v=0 (the first attempt) made it vanish within a third of a second.
+      if (this.assists) {
+        const sheetPeak = ((100 / 3.6) / car.zeroToHundred) * 1.25;
+        const fade = THREE.MathUtils.clamp((Math.abs(this.vLong) - 12.5) / 8, 0, 1);
+        const capAccel = sheetPeak * (1 - fade) + 30 * fade;
+        driveForce = Math.min(driveForce, mass * capAccel);
+      }
     }
+    if (this.shiftCut > 0) this.shiftCut = Math.max(0, this.shiftCut - dt);
 
     // Engine braking and coasting drag.
     const engineBrake = input.throttle > 0.02 ? 0 : Math.min(Math.abs(this.vLong) * 22, 900);
@@ -215,8 +237,11 @@ export class Vehicle {
     const alphaRear = Math.atan2(this.vLat - b * this.yawRate, vxAbs);
 
     // Cornering stiffness scales with load; grippier tyres are also stiffer.
+    // The rear runs meaningfully stiffer than the front, as road-car setups
+    // do — the no-assists probe showed the mid-engined 718 looping at 60%
+    // throttle with the old near-neutral split.
     const stiffnessFront = 11 * Fzf * (0.7 + car.grip * 0.3);
-    const stiffnessRear = 11.5 * Fzr * (0.7 + car.grip * 0.3);
+    const stiffnessRear = 12.2 * Fzr * (0.7 + car.grip * 0.3);
 
     let FyFront = -clampSym(stiffnessFront * alphaFront, capFront);
     let FyRear = -clampSym(stiffnessRear * alphaRear, capRear);
@@ -255,18 +280,27 @@ export class Vehicle {
     // held brake pedal keeps the car still instead of driving it backwards.
     const dir = Math.abs(this.vLong) < 0.05 ? 0 : Math.sign(this.vLong);
     const longFront = driveFront - brakeFront * dir;
-    const longRear = driveRear - brakeRear * dir;
+    let longRear = driveRear - brakeRear * dir;
 
     if (!this.assists) {
-      // Without the electronics, overdriving an axle scrubs its lateral grip
-      // away — this is where power oversteer and lock-up understeer come from.
-      FyFront = clampSym(FyFront, ellipseRemainder(capFront, longFront));
-      FyRear = clampSym(FyRear, ellipseRemainder(capRear, longRear));
+      // Without the electronics, overdriving an axle costs lateral grip —
+      // power oversteer, lock-up understeer. The axle shares its friction
+      // circle proportionally: the old hard clamp zeroed the lateral force
+      // the instant the circle filled, which snapped stiff rear ends from
+      // grip to spin with nothing in between.
+      const shareCircle = (fy: number, long: number, cap: number): number => {
+        const combined = Math.hypot(fy, long);
+        return combined > cap ? fy * (cap / combined) : fy;
+      };
+      FyFront = shareCircle(FyFront, longFront, capFront);
+      FyRear = shareCircle(FyRear, longRear, capRear);
     }
 
     if (input.handbrake) {
       // Lock the rears: lateral grip collapses, longitudinal drag rises.
       FyRear *= 0.32;
+      // The locked axle scrubs at roughly its sliding-friction budget.
+      longRear -= capRear * 0.7 * dir;
     }
 
     // --- Accelerations --------------------------------------------------
@@ -281,6 +315,14 @@ export class Vehicle {
     const headingDot = this.forward.x * tp.tangent.x + this.forward.z * tp.tangent.z;
     const gradient = tp.tangent.y * Math.sign(headingDot || 1);
     aLong -= G * gradient;
+
+    // Hill hold: at a standstill `dir` is 0, so the brake force above cannot
+    // act — but a pressed pedal must still hold the car against the slope, up
+    // to what the pads can actually deliver.
+    if (dir === 0 && !wantsReverse && (input.brake > 0.05 || input.handbrake)) {
+      const holdCap = (Math.max(input.brake, input.handbrake ? 0.6 : 0) * maxBrakeForce) / mass;
+      aLong -= THREE.MathUtils.clamp(aLong, -holdCap, holdCap);
+    }
 
     // Banking in the Karussell adds lateral load into the corner. Positive
     // banking raises the left edge, so gravity pulls the car to the right.
@@ -345,13 +387,15 @@ export class Vehicle {
     if (!car.electric || car.gearRatios.length > 1) {
       if (rpm > car.redlineRpm * 0.94 && this.gear < car.gearRatios.length && input.throttle > 0.1) {
         this.gear++;
+        // Even a good DCT spends a beat without drive.
+        if (!car.electric) this.shiftCut = 0.22;
       } else if (rpm < car.redlineRpm * 0.42 && this.gear > 1) {
         this.gear--;
       }
     }
 
     // --- Barriers ---------------------------------------------------------
-    this.trackIndex = road.nearestIndex(this.position, this.trackIndex, 40);
+    this.trackIndex = road.nearestIndex(this.position, this.trackIndex, 240);
     const tpAfter = road.at(this.trackIndex);
     const newLateral = road.lateralOffset(this.position, this.trackIndex);
     const barrier = tpAfter.halfWidth + 6.5;
@@ -398,7 +442,9 @@ export class Vehicle {
     const usedFront = Math.hypot(FyFront, longFront) / Math.max(capFront, 1);
     const usedRear = Math.hypot(FyRear, longRear) / Math.max(capRear, 1);
     const t = this.telemetry;
-    t.speedKmh = Math.abs(this.vLong) * 3.6;
+    // Road speed is the full velocity vector — a car sliding sideways through
+    // Brünnchen is not doing 0 km/h.
+    t.speedKmh = Math.hypot(this.vLong, this.vLat) * 3.6;
     t.rpm = rpm;
     t.gear = this.gear;
     t.gripUsage = THREE.MathUtils.clamp(Math.max(usedFront, usedRear), 0, 1.4);
