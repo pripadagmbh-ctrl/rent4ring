@@ -137,8 +137,12 @@ export function buildCrowd(): Crowd {
   // and shorts, and above all that long black tourer — rather than a
   // likeness, which would sit oddly against low-poly gorillas anyway.
   const tanju = buildTanju(keep);
-  tanju.group.position.set(1.6, 0, 8.4);
-  tanju.group.rotation.y = -0.85;
+  // At the far end of the line, not in the middle of the yard: (1.6, 8.4) put
+  // him squarely on the departure route, which runs out of the doorway at
+  // x = 1.4 before the left-hander. Everyone else stands between x -7.4 and
+  // -1.6, so he parks just beyond them.
+  tanju.group.position.set(-9.7, 0, 8.2);
+  tanju.group.rotation.y = 0.72;
   group.add(tanju.group);
   wavers.push({ arm: tanju.arm, phase: 1.25 });
 
