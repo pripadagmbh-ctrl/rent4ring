@@ -116,12 +116,25 @@
   font-size: 14px;
 }
 
-.menu__legal {
+/* Footer: the reference material. Herr Müller does the greeting up top, so
+   what is left down here is the survey detail and the licence note. */
+.menu__footer {
   position: relative;
-  margin-top: 30px;
+  margin-top: 34px;
+  max-width: 70ch;
+}
+
+.menu__about {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.menu__legal {
+  margin: 0;
   font-size: 11px;
   color: #55606d;
-  max-width: 70ch;
   line-height: 1.6;
 }
 

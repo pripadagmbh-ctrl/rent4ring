@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Logo from './Logo';
 import Gorilla from './Gorilla';
 import trackData from '../data/nordschleife.json';
@@ -9,6 +10,17 @@ interface Props {
   carLabel: string;
 }
 
+/**
+ * He greets you before the sales pitch does. Cheeky, because he is the one
+ * handing over keys to a car worth more than his van.
+ */
+const GREETINGS = [
+  'Ah, a customer. Pick something with far too much power, frighten yourself through the Fuchsröhre, and bring it back in one piece. That last part is not negotiable.',
+  'You look like a quick one. They all do, standing here. The Nordschleife has opinions about that and it shares them at Wehrseifen.',
+  'Welcome. The excess is two and a half thousand, the coffee is free, and the Armco has never once lost an argument. Choose accordingly.',
+  'Come in, come in. I have twelve cars, one circuit and a great deal of paperwork if you get this wrong. Shall we?',
+];
+
 // Derived once from the survey data itself, so the copy can never drift from
 // the tiles below it (which already read the same source).
 const LAP_KM = (trackData.lapLength / 1000).toFixed(1);
@@ -18,6 +30,10 @@ const ELEVATION_M = Math.round(
 );
 
 export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
+  // Picked once per visit, not per render, or he would change his mind
+  // every time React re-draws the screen.
+  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+
   return (
     <div className="screen menu">
       <div className="menu__glow" aria-hidden="true" />
@@ -26,11 +42,18 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
         <Logo width={340} className="menu__logo" />
         <div className="menu__tagline">Racing Tools · Home Circuit Nordschleife</div>
 
-        <p className="menu__lead">
-          From Burgstrasse 1 in Nurburg up into the Green Hell. The circuit is rebuilt metre by metre from real
-          survey data — {LAP_KM} km, {SECTION_COUNT} named sections, {ELEVATION_M} metres of elevation, the
-          Karussell, and the Nurburg castle looking down on the lot of it.
-        </p>
+        {/* He does the welcoming, right at the top. The survey-data detail
+            that used to sit here has moved to the footer — it is reference
+            material, not a greeting. */}
+        <div className="menu__mueller">
+          <Gorilla mood="cheer" className="menu__mueller-fig" />
+          <div className="speech speech--menu">
+            <strong>Herr Müller</strong>
+            {greeting}
+          </div>
+        </div>
+
+        <p className="menu__lead">From Burgstrasse 1 in Nurburg up into the Green Hell.</p>
 
         <div className="menu__actions">
           <button className="btn-primary btn-primary--big" onClick={onGarage}>
@@ -60,19 +83,18 @@ export default function Menu({ onGarage, onQuickStart, carLabel }: Props) {
           </div>
         </div>
 
-        <div className="menu__mueller">
-          <Gorilla mood="cheer" className="menu__mueller-fig" />
-          <div className="speech speech--menu">
-            <strong>Herr Müller</strong>
-            Welcome to Rent4Ring! I&rsquo;ll be waiting at the finish with a trophy. Get round quickly enough and
-            there&rsquo;s up to 10% off your next booking in it for you.
-          </div>
-        </div>
       </div>
 
-      <div className="menu__legal">
-        Circuit geometry derived from {trackData.source}. Road approach routed from the OSM street network.
-        Unofficial fan project, not affiliated with Nürburgring 1927 GmbH &amp; Co. KG.
+      <div className="menu__footer">
+        <p className="menu__about">
+          The circuit is rebuilt metre by metre from real survey data — {LAP_KM} km, {SECTION_COUNT} named
+          sections, {ELEVATION_M} metres of elevation, the Karussell, and the Nurburg castle looking down on
+          the lot of it. Get round quickly enough and there is up to 10% off your next booking in it.
+        </p>
+        <p className="menu__legal">
+          Circuit geometry derived from {trackData.source}. Road approach routed from the OSM street network.
+          Unofficial fan project, not affiliated with Nürburgring 1927 GmbH &amp; Co. KG.
+        </p>
       </div>
     </div>
   );
