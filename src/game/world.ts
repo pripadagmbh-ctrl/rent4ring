@@ -125,14 +125,18 @@ export function buildWorld(track: Track, entranceIndex = -1): WorldHandles {
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(track, i, side, offset, lift);
 
+  // The road and its aprons are open ribbons: single-sided, they vanish when
+  // seen from below — on hillsides the circuit appeared to float with sky
+  // showing through the gap. DoubleSide closes those views.
   const asphaltMat = new THREE.MeshStandardMaterial({
     map: asphaltTexture(),
     color: 0x6a6a6e,
     roughness: 0.94,
+    side: THREE.DoubleSide,
   });
-  const vergeMat = new THREE.MeshStandardMaterial({ color: 0x7d7f76, roughness: 1 });
-  const grassMat = new THREE.MeshStandardMaterial({ color: 0x577a3c, roughness: 1 });
-  const outerMat = new THREE.MeshStandardMaterial({ color: 0x50713a, roughness: 1 });
+  const vergeMat = new THREE.MeshStandardMaterial({ color: 0x7d7f76, roughness: 1, side: THREE.DoubleSide });
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x577a3c, roughness: 1, side: THREE.DoubleSide });
+  const outerMat = new THREE.MeshStandardMaterial({ color: 0x50713a, roughness: 1, side: THREE.DoubleSide });
   // Material.dispose() does not free its textures — push the map separately.
   disposables.push(asphaltMat.map!, asphaltMat, vergeMat, grassMat, outerMat);
 
@@ -181,13 +185,16 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
   const disposables: { dispose(): void }[] = [];
   const edge = (i: number, side: number, offset: number, lift = 0) => edgeAt(approach, i, side, offset, lift);
 
+  // DoubleSide for the same reason as the circuit's ribbons: the approach
+  // drops towards the yard and would otherwise show sky through its underside.
   const asphaltMat = new THREE.MeshStandardMaterial({
     map: asphaltTexture(),
     color: 0x5d5f64,
     roughness: 0.95,
+    side: THREE.DoubleSide,
   });
-  const kerbMat = new THREE.MeshStandardMaterial({ color: 0x9a9a94, roughness: 1 });
-  const grassMat = new THREE.MeshStandardMaterial({ color: 0x51733a, roughness: 1 });
+  const kerbMat = new THREE.MeshStandardMaterial({ color: 0x9a9a94, roughness: 1, side: THREE.DoubleSide });
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x51733a, roughness: 1, side: THREE.DoubleSide });
   // Material.dispose() does not free its textures — push the map separately.
   disposables.push(asphaltMat.map!, asphaltMat, kerbMat, grassMat);
 
@@ -199,7 +206,15 @@ export function buildApproachWorld(approach: Approach): WorldHandles {
   ) => ribbon(approach, inner, outer, mat, uv, disposables);
 
   root.add(rib((i) => edge(i, -1, 1.2, -0.12), (i) => edge(i, -1, 40, -3), grassMat, 0.02));
-  root.add(rib((i) => edge(i, 1, 40, -3), (i) => edge(i, 1, 1.2, -0.12), grassMat, 0.02));
+  // The Rent4Ring yard sits on the LEFT of the first ~50 m (the departure
+  // choreography drives all over it) — hold the meadow back to a kerb-side
+  // strip there, then fade it out to full width. Without this the falling
+  // grass sheet cut straight through the forecourt, ramp and link lane.
+  const leftMeadow = (i: number) => {
+    const f = THREE.MathUtils.smoothstep(i, 7, 15);
+    return edge(i, 1, 1.3 + (40 - 1.3) * f, -0.12 + (-3 + 0.12) * f);
+  };
+  root.add(rib(leftMeadow, (i) => edge(i, 1, 1.2, -0.12), grassMat, 0.02));
   root.add(rib((i) => edge(i, -1, 0, 0.01), (i) => edge(i, -1, 1.25, -0.1), kerbMat, 0.06));
   root.add(rib((i) => edge(i, 1, 1.25, -0.1), (i) => edge(i, 1, 0, 0.01), kerbMat, 0.06));
 
@@ -257,15 +272,18 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
   const villageEnd = Math.floor(approach.count * 0.55);
   for (let i = 4; i < villageEnd; i += 5) {
     for (const side of [1, -1]) {
+      // The left of the first stretch belongs to the Rent4Ring yard.
+      if (side === 1 && i < 10) continue;
       if (rand() > 0.62) continue;
       const p = approach.at(i);
-      const off = p.halfWidth + 7 + rand() * 6;
-      const pos = p.pos.clone().addScaledVector(p.normal, side * off);
-      const yaw = Math.atan2(p.tangent.x, p.tangent.z) + (rand() - 0.5) * 0.25;
-
       const w = 7 + rand() * 4;
       const d = 8 + rand() * 4;
       const h = 5.5 + rand() * 3;
+      // Clearance scales with the house so the wall (and the 6% roof
+      // overhang) can never lean into the carriageway or the chase camera.
+      const off = p.halfWidth + 6 + w / 2 + rand() * 5;
+      const pos = p.pos.clone().addScaledVector(p.normal, side * off);
+      const yaw = Math.atan2(p.tangent.x, p.tangent.z) + (rand() - 0.5) * 0.25;
 
       dummy.position.set(pos.x, pos.y + h / 2 - 0.4, pos.z);
       dummy.rotation.set(0, yaw, 0);
@@ -280,10 +298,12 @@ function buildVillage(approach: Approach, root: THREE.Group, disposables: { disp
       roofs.push(dummy.matrix.clone());
 
       // Garden hedge along the road frontage.
-      const hedgePos = p.pos.clone().addScaledVector(p.normal, side * (p.halfWidth + 2.4));
+      // Short hedge runs, set back from the kerb: the old 22 m straight bars
+      // cut across the tarmac wherever the road curved.
+      const hedgePos = p.pos.clone().addScaledVector(p.normal, side * (p.halfWidth + 3.2));
       dummy.position.set(hedgePos.x, hedgePos.y + 0.55, hedgePos.z);
       dummy.rotation.set(0, Math.atan2(p.tangent.x, p.tangent.z), 0);
-      dummy.scale.set(0.7, 1.1, 22);
+      dummy.scale.set(0.7, 1.1, 10);
       dummy.updateMatrix();
       hedges.push(dummy.matrix.clone());
     }
@@ -426,7 +446,11 @@ function buildHomeBase(approach: Approach, root: THREE.Group, disposables: { dis
   // Strip lights on the ceiling, so the inside of the shed is not a black hole.
   const tubeMat = push(new THREE.MeshBasicMaterial({ color: 0xfff4d8 }));
   for (const tx of [-3.6, 3.6]) box(0.44, 0.12, 7, tx, H - 0.42, 0, tubeMat);
-  const bay = new THREE.PointLight(0xffeccd, 42, 18, 2);
+  // Verified against a raycast + pixel sample of the actual render: at 42 the
+  // bloom pass (threshold 0.86) blew the whole shed interior out to a flat
+  // near-white field from any angle inside — not a geometry/camera bug, pure
+  // overexposure. 8 keeps a warm highlight on the car without blowing out.
+  const bay = new THREE.PointLight(0xffeccd, 8, 18, 2);
   bay.position.set(0.6, H - 1.2, 0.5);
   group.add(bay);
 
@@ -539,7 +563,9 @@ function buildBarriers(
 ): void {
   const n = track.count;
   const railGeo = new THREE.BoxGeometry(0.12, 0.62, 1);
-  const postGeo = new THREE.BoxGeometry(0.14, 1.0, 0.14);
+  // Long enough to reach the falling ground beside the road — short posts left
+  // the rail visibly floating wherever the verge dropped away.
+  const postGeo = new THREE.BoxGeometry(0.14, 1.9, 0.14);
   const railMat = new THREE.MeshStandardMaterial({ color: 0xb9bec4, roughness: 0.5, metalness: 0.65 });
   const postMat = new THREE.MeshStandardMaterial({ color: 0x8b9096, roughness: 0.7, metalness: 0.4 });
   disposables.push(railGeo, postGeo, railMat, postMat);
@@ -574,12 +600,12 @@ function buildBarriers(
       dummy.updateMatrix();
       rails.push(dummy.matrix.clone());
 
-      if (i % (stride * 2) === 0) {
-        dummy.position.set(pos.x, pos.y + 0.42, pos.z);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        posts.push(dummy.matrix.clone());
-      }
+      // A post at every rail segment, planted below grade so it always meets
+      // the ground even where the meadow falls away from the road.
+      dummy.position.set(pos.x, pos.y + 0.08, pos.z);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      posts.push(dummy.matrix.clone());
     }
   }
 
