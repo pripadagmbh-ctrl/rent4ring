@@ -443,10 +443,8 @@
 }
 
 /* ========================================================= Mueller HUD panel */
+/* Positioned by .hud__rail, not on its own — see the rail's comment. */
 .mueller {
-  position: absolute;
-  left: calc(18px + var(--safe-left));
-  bottom: calc(18px + var(--safe-bottom));
   width: 208px;
   background: rgba(8, 11, 15, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1219,14 +1217,32 @@
     width: 120px;
     height: 6px;
   }
+  /* Right-hand stack runs downwards on a phone: pause, speed, revs, minimap
+     (which ends at 266), then the gauge. */
+  .instrument {
+    top: calc(274px + var(--safe-top));
+    right: calc(12px + var(--safe-right));
+    bottom: auto;
+  }
+  .instrument__value {
+    font-size: 14px;
+  }
 
   /* Left rail: Herr Müller under the timebox. */
   .mueller {
-    top: calc(104px + var(--safe-top));
-    bottom: auto;
-    left: calc(10px + var(--safe-left));
     width: 118px;
     padding: 6px;
+  }
+
+  /* On a phone the rail stacks from the top instead of spanning the height:
+     the bottom belongs to the touch pads, so Herr Müller follows straight
+     under the timing stack rather than being pushed down onto them. */
+  .hud__rail {
+    top: calc(16px + var(--safe-top));
+    left: calc(10px + var(--safe-left));
+    bottom: auto;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
   /* Minimap under the right rail. */

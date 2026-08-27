@@ -254,10 +254,23 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-.hud__topleft {
+/* The left rail owns the whole column: timing stack at the top, Herr Müller
+   at the bottom. One layout context means a growing stack can never land on
+   top of him — flexbox pushes instead of overlapping. */
+.hud__rail {
   position: absolute;
   top: calc(18px + var(--safe-top));
   left: calc(18px + var(--safe-left));
+  bottom: calc(18px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.hud__topleft {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -362,6 +375,29 @@ button {
   letter-spacing: 0.2em;
   color: var(--muted);
   text-transform: uppercase;
+}
+
+/* The car's own gauge, sat above the rev bar in the right-hand stack. */
+.instrument {
+  position: absolute;
+  right: calc(22px + var(--safe-right));
+  bottom: calc(136px + var(--safe-bottom));
+  text-align: right;
+}
+
+.instrument__value {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+}
+
+.instrument__label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .revbar {

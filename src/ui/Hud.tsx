@@ -20,37 +20,52 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
 
   return (
     <div className="hud">
-      {/* ------------------------------------------------- timing (top left) */}
-      <div className="hud__topleft">
-        {onApproach ? (
-          <div className="timebox timebox--approach">
-            <div className="timebox__label">Road to the Ring</div>
-            <div className="timebox__value">{(hud.approachRemaining / 1000).toFixed(2)} km</div>
-            <button className="timebox__skip" onClick={onSkipApproach}>
-              Skip
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="timebox">
-              <div className="timebox__label">
-                {hud.phase === 'outlap' ? 'Out lap' : 'Current lap'}
-              </div>
-              <div className="timebox__value">
-                {hud.phase === 'outlap' ? '—:—.———' : formatLap(hud.lapTime)}
-              </div>
+      {/* The whole left-hand column lives in one flow container: the timing
+          stack changes height with the phase (a delta box appears once there
+          is a best lap, the approach shows a different card), and while the
+          stack and Herr Müller were positioned independently the taller
+          states simply ran into him. In one flex column that cannot happen. */}
+      <div className="hud__rail">
+        {/* ----------------------------------------------- timing (top left) */}
+        <div className="hud__topleft">
+          {onApproach ? (
+            <div className="timebox timebox--approach">
+              <div className="timebox__label">Road to the Ring</div>
+              <div className="timebox__value">{(hud.approachRemaining / 1000).toFixed(2)} km</div>
+              <button className="timebox__skip" onClick={onSkipApproach}>
+                Skip
+              </button>
             </div>
-            <div className="timebox timebox--small">
-              <div className="timebox__label">Best lap</div>
-              <div className="timebox__value">{formatLap(hud.bestLap)}</div>
-            </div>
-            {hud.delta !== null && (
-              <div className={`delta ${hud.delta <= 0 ? 'delta--up' : 'delta--down'}`}>
-                {formatDelta(hud.delta)}
+          ) : (
+            <>
+              <div className="timebox">
+                <div className="timebox__label">
+                  {hud.phase === 'outlap' ? 'Out lap' : 'Current lap'}
+                </div>
+                <div className="timebox__value">
+                  {hud.phase === 'outlap' ? '—:—.———' : formatLap(hud.lapTime)}
+                </div>
               </div>
-            )}
-          </>
-        )}
+              <div className="timebox timebox--small">
+                <div className="timebox__label">Best lap</div>
+                <div className="timebox__value">{formatLap(hud.bestLap)}</div>
+              </div>
+              {hud.delta !== null && (
+                <div className={`delta ${hud.delta <= 0 ? 'delta--up' : 'delta--down'}`}>
+                  {formatDelta(hud.delta)}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ------------------------------------------ Herr Müller, always on */}
+        <MuellerPanel
+          mood={hud.muellerMood}
+          line={hud.muellerLine}
+          damageCost={hud.damageCost}
+          damage={hud.damage}
+        />
       </div>
 
       {/* ------------------------------------------------- section (top mid) */}
@@ -100,13 +115,12 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
         </div>
       </div>
 
-      {/* -------------------------------------------- Herr Müller, always on */}
-      <MuellerPanel
-        mood={hud.muellerMood}
-        line={hud.muellerLine}
-        damageCost={hud.damageCost}
-        damage={hud.damage}
-      />
+      {/* The car's own gauge — downforce, motor speed or cornering load,
+          depending on what the thing you are driving is actually about. */}
+      <div className="instrument">
+        <div className="instrument__value">{hud.instrument.value}</div>
+        <div className="instrument__label">{hud.instrument.label}</div>
+      </div>
 
       {!onApproach && <Minimap carPos={hud.carPos} ghostPos={hud.ghostPos} />}
 

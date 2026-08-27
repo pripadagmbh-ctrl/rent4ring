@@ -74,6 +74,12 @@ export interface HudState {
   muellerLine: string;
   /** True while the car is backing up, so the HUD can show R. */
   reversing: boolean;
+  /**
+   * One extra readout, chosen to suit the car being driven — a wing car is
+   * read by its downforce, an EV by motor speed, and everything else by how
+   * hard it is leaning on the tyres. See `instrumentReadout`.
+   */
+  instrument: { label: string; value: string };
 }
 
 const SECTOR_BOUNDS = [
@@ -1004,6 +1010,26 @@ export class Game {
     this.setMood('scared', 'Right, back on the black stuff. Slower in this time, eh?', 4);
   }
 
+  /**
+   * The car-specific gauge. Which number is worth a tile depends entirely on
+   * what the car is: the GT3 RS makes 423 kg of downforce at 200 km/h and the
+   * GR Yaris 60, so the wing cars are read by their aero; the Taycan's single
+   * -speed drive unit spins to 16,000 rpm, where a gear-based tacho says
+   * nothing; and for the rest, tyre load through a corner is the live number.
+   * All three come from telemetry the physics already produces.
+   */
+  private instrumentReadout(t: VehicleTelemetry | null): { label: string; value: string } {
+    const car = this.car;
+    if (car.electric) {
+      return { label: 'Motor', value: `${((t?.rpm ?? 0) / 1000).toFixed(1)}k` };
+    }
+    if (car.downforce >= 5e-5) {
+      const v = (t?.speedKmh ?? 0) / 3.6;
+      return { label: 'Downforce', value: `${Math.round(car.downforce * v * v * car.massKg)} kg` };
+    }
+    return { label: 'Lateral', value: `${Math.abs(t?.lateralG ?? 0).toFixed(1)} g` };
+  }
+
   private emitHud(): void {
     const t = this.telemetry;
     const idx = this.vehicle.trackIndex;
@@ -1041,6 +1067,7 @@ export class Game {
       muellerMood: this.mood,
       muellerLine: this.moodLine,
       reversing: this.vehicle.vLong < -0.2,
+      instrument: this.instrumentReadout(t),
     });
   }
 
