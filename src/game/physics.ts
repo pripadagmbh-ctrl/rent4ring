@@ -5,6 +5,13 @@ import type { RoadPath } from './track';
 const G = 9.81;
 
 /** Full mechanical lock at the road wheels, radians. */
+/**
+ * How far a road bike on road tyres will lean before the pegs, and then the
+ * fairing, find the tarmac. 50° is a committed road rider; MotoGP goes past
+ * 60 on slicks and Herr Müller is not doing that on the Burgstraße.
+ */
+const MAX_LEAN = 0.87;
+
 const STEER_LOCK = 0.58;
 /** The least lock ever offered, so the car still steers at Döttinger speed. */
 const STEER_MIN = 0.02;
@@ -90,6 +97,8 @@ export class Vehicle {
   /** Visual-only body attitude, driven by load transfer. */
   pitch = 0;
   roll = 0;
+  /** Two wheels. It leans instead of rolling, and it does not drift. */
+  private readonly isBike: boolean;
 
   assists = true;
   /**
@@ -119,6 +128,7 @@ export class Vehicle {
 
   constructor(car: Car) {
     this.car = car;
+    this.isBike = car.bike === true;
   }
 
   get forward(): THREE.Vector3 {
@@ -475,7 +485,28 @@ export class Vehicle {
     const lonG = aLong / G;
     const latG = aLat / G;
     this.pitch += (THREE.MathUtils.clamp(-lonG * 0.035, -0.06, 0.06) - this.pitch) * Math.min(1, dt * 7);
-    this.roll += (THREE.MathUtils.clamp(latG * 0.045, -0.09, 0.09) + tpAfter.banking * 0.85 - this.roll) * Math.min(1, dt * 7);
+
+    // Roll, and the two vehicle types do opposite things with it.
+    //
+    // A motorcycle *corners by leaning*: the resultant of gravity and the
+    // centripetal force has to run through the contact patch, which puts the
+    // lean at exactly atan(a_lat / g). That is not a styling number, it is the
+    // geometry, and it is the whole reason a bike gets round a corner at all.
+    // The cap is what a road bike on road tyres dares before the pegs and then
+    // the fairing touch down.
+    //
+    // A car does the opposite: the body rolls *away* from the corner, because
+    // the mass is above the roll centre and inertia throws it outward. The old
+    // code leaned cars inward — measured on the GT3 RS at 0,7 g, the roof
+    // tipped 0,032 towards the inside — which is a motorcycle's behaviour on a
+    // vehicle that cannot do it.
+    const wantRoll = this.isBike
+      ? THREE.MathUtils.clamp(Math.atan(latG), -MAX_LEAN, MAX_LEAN)
+      : THREE.MathUtils.clamp(-latG * 0.045, -0.09, 0.09);
+    // A bike also has to get there quickly; a car's body is on springs and
+    // takes its time.
+    const rollRate = this.isBike ? 9 : 7;
+    this.roll += (wantRoll + tpAfter.banking * 0.85 - this.roll) * Math.min(1, dt * rollRate);
 
     // --- Telemetry ----------------------------------------------------------
     const usedFront = Math.hypot(FyFront, longFront) / Math.max(capFront, 1);

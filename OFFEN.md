@@ -126,6 +126,11 @@ mit 15,8 Prozent am schwersten, der Ferrari mit 22,1 am leichtesten. Ob das
 angeglichen wird, ist eine Design-Entscheidung und keine Messfrage.
 
 **Weiter offen: die Ducati.** 352 Kontakte, 45,7 Prozent neben der Strecke.
+Inzwischen ist ihre Zahl doppelt untauglich: Das Spiel lässt ein Motorrad
+jenseits der Haftgrenze stürzen (`Game.checkLowside`), `driveLap` in
+`simulate.ts` nicht — das Werkzeug fährt also einen Sturz, den es im Spiel gar
+nicht mehr gäbe, einfach weiter. Wer den Follower repariert, muss den Lowside
+mit abbilden, sonst misst er ein Fahrzeug, das es nicht gibt.
 Der Follower fährt kein Motorrad. Eine Dämpfung des Lenkbefehls hat ihr wenig
 geholfen (445 → 352) und den Autos gemischt geschadet (Taycan 14 → 34
 Kontakte), war aber netto beim Abkommen ein Gewinn und ist deshalb drin. Was

@@ -121,6 +121,23 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Behoben
 
+- **Autos neigten sich in die Kurve statt aus ihr heraus.** Gemessen am
+  GT3 RS bei 0,7 g: das Dach kippte um 0,032 nach innen. Das ist das Verhalten
+  eines Motorrads auf einem Fahrzeug, das es nicht kann — die Masse sitzt über
+  dem Rollzentrum und wird nach außen geworfen. Vorzeichen gedreht, an den
+  Rundenzeiten ändert das erwartungsgemäß nichts (auf die Millisekunde
+  identisch).
+- **Das Motorrad hat jetzt eine echte Schräglage.** Vorher bekam es die
+  Karosserieneigung eines Autos: maximal 5°, und in die falsche Richtung. Ein
+  Motorrad fährt aber *durch* Schräglage — die Resultierende aus Schwerkraft
+  und Fliehkraft muss durch den Reifenaufstandspunkt laufen, was den Winkel auf
+  genau `atan(a_quer/g)` festlegt. Gemessen: 0,14 g → 7,9° (Theorie 8,1°),
+  0,63 g → 32,5° (Theorie 32,4°). Grenze bei 50°, wo Rasten und Verkleidung
+  aufsetzen.
+- **Motorräder driften nicht mehr.** Auf Asphalt endet zu viel Schräglage
+  nicht in einem eleganten Rutscher, sondern am Boden. Wer die Haftgrenze
+  länger als einen Wimpernschlag überschreitet, geht jetzt zu Boden statt zu
+  driften; kurze Ausreißer über Kerbs und Kuppen zählen nicht.
 - **Fahrzeuge driften nicht mehr.** Der Lenkeinschlag war um das Achtfache zu
   groß; er wird jetzt aus dem Reifengrip abgeleitet statt geraten.
 - **Streckeneinfahrt.** Die Leitplanke hatte ihre Lücke auf der falschen Seite,
