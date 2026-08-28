@@ -8,6 +8,8 @@ interface Props {
   damageCost: number;
   /** 0–1, how battered the car is. */
   damage: number;
+  /** The bar is measuring Herr Müller, not the vehicle. */
+  damageIsRider: boolean;
 }
 
 const MOOD_TINT: Record<Mood, string> = {
@@ -20,7 +22,7 @@ const MOOD_TINT: Record<Mood, string> = {
 };
 
 /** The always-on Herr Müller window, bottom-left of the HUD. */
-export default function MuellerPanel({ mood, line, damageCost, damage }: Props) {
+export default function MuellerPanel({ mood, line, damageCost, damage, damageIsRider }: Props) {
   return (
     <div className={`mueller mueller--${mood}`} style={{ borderColor: MOOD_TINT[mood] }}>
       <div className="mueller__stage">
@@ -32,15 +34,39 @@ export default function MuellerPanel({ mood, line, damageCost, damage }: Props) 
 
       <div className="mueller__damage">
         <div className="mueller__damage-head">
-          <span>Damage</span>
-          <b className={damageCost > 0 ? 'is-billing' : ''}>
-            {damageCost.toLocaleString('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+          {/* On his own bike the bar is him, and a repair bill he sends
+              himself is not news — so the money gives way to the man. */}
+          <span>{damageIsRider ? 'Herr Müller' : 'Damage'}</span>
+          <b className={!damageIsRider && damageCost > 0 ? 'is-billing' : ''}>
+            {damageIsRider
+              ? hurtLabel(damage)
+              : damageCost.toLocaleString('en-GB', {
+                  style: 'currency',
+                  currency: 'EUR',
+                  maximumFractionDigits: 0,
+                })}
           </b>
         </div>
         <div className="mueller__damage-bar">
-          <div className="mueller__damage-fill" style={{ width: `${Math.min(1, damage) * 100}%` }} />
+          <div
+            className={`mueller__damage-fill ${damageIsRider ? 'is-rider' : ''}`}
+            style={{ width: `${Math.min(1, damage) * 100}%` }}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * How he is doing, in his own terms. He would not say "68 per cent injured",
+ * and a percentage is the wrong unit for a man anyway.
+ */
+function hurtLabel(damage: number): string {
+  if (damage < 0.02) return 'Fine';
+  if (damage < 0.25) return 'Bruised';
+  if (damage < 0.5) return 'Limping';
+  if (damage < 0.75) return 'Bleeding';
+  if (damage < 1) return 'Not good';
+  return 'Ambulance';
 }

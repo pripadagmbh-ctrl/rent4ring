@@ -16,11 +16,14 @@ import { buildTowTruck, type TowTruck } from './towTruck';
 import { buildCrowd, type Crowd } from './crowd';
 import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
 import { buildSkidMarks, type SkidMarks } from './skidmarks';
+import { startSpill, type Spill } from './spill';
+import { buildAmbulance } from './ambulance';
+import { buildPoliceCar, type PoliceCar } from './police';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
-import { DALE_APOLOGIES, tipFor, type DaleTip } from '../data/daleTips';
+import { DALE_APOLOGIES, DALE_WORRIED, tipFor, type DaleTip } from '../data/daleTips';
 import { departureRoute, departureSpeedAt, fleetParkingSpots, homeBaseFrame, toWorld, YARD_Y, type DepartureRoute } from './departure';
 import { FLEET } from '../data/fleet';
 
@@ -72,6 +75,12 @@ export interface Retirement {
   contacts: number;
   /** How many times this browser has now been thrown out. */
   banCount: number;
+  /**
+   * True when it was Herr Müller who ran out, not the car. Then there is no
+   * ban to hand out — it is his bike and his fault — and an ambulance comes
+   * instead of the recovery truck.
+   */
+  rider: boolean;
 }
 
 export interface HudState {
@@ -97,7 +106,14 @@ export interface HudState {
   ghostPos: { x: number; z: number } | null;
   /** Metres still to drive before reaching the circuit. */
   approachRemaining: number;
+  /**
+   * 0-1. In a car this is bodywork; on the bike it is Herr Müller, because he
+   * owns the Panigale and a bill he sends himself decides nothing. What ends
+   * a ride on it is the man, so that is what the bar has to show.
+   */
   damage: number;
+  /** True while the bar is measuring the rider rather than the vehicle. */
+  damageIsRider: boolean;
   damageCost: number;
   muellerMood: Mood;
   muellerLine: string;
@@ -226,9 +242,80 @@ export class Game {
   /** The Starenkasten in the village, and whether it has had you yet. */
   private speedCamera: SpeedCamera | null = null;
   private skidMarks: SkidMarks | null = null;
+  /** Seconds of wheelie left, and the eased nose-up angle in radians. */
+  private wheelieFor = 0;
+  private wheelieAngle = 0;
+  /** Herr Müller off the bike and picking himself up, or null. */
+  private spill: Spill | null = null;
+  /**
+   * On the bike the damage bar is *him*, not the machine. He owns the Panigale,
+   * so a repair bill is money out of one pocket into the other; what actually
+   * ends a ride is the man. Cars keep the old meaning.
+   */
+  private riderHurt = 0;
+  /** Seconds until Dale says the next worried thing about his partner. */
+  private daleWorryIn = 3;
+  /** The patrol car, once the camera has given it a reason to exist. */
+  private police: PoliceCar | null = null;
+  /** How far back down the approach it is, in metres. */
+  private policeBehind = 0;
+  private policeFor = 0;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
+
+  /**
+   * A patrol car pulls out behind you. It is not a chase you can lose by
+   * driving well — it gives up at the circuit gate, because the Nordschleife
+   * is private ground and the StVO stops at the barrier. That is the whole
+   * joke, and Herr Müller is the one who says it out loud.
+   */
+  private sendPolice(): void {
+    if (this.police) return;
+    const car = buildPoliceCar();
+    this.police = car;
+    this.policeBehind = POLICE_START_BEHIND_M;
+    this.policeFor = 0;
+    this.scene.add(car.group);
+    this.setMood('scared', pick(POLICE_LINES), 6);
+  }
+
+  /**
+   * Keeps the patrol car on the approach centreline a set distance back, and
+   * closes that distance steadily. Placed along the road rather than driven by
+   * physics: it has to follow the same curve you are on and arrive at the gate
+   * when you do, and a second driving model would only find new ways to end up
+   * in a hedge.
+   */
+  private updatePolice(dt: number): void {
+    const car = this.police;
+    if (!car) return;
+    this.policeFor += dt;
+    car.update(this.policeFor);
+
+    // Closes in, but never quite arrives — it is pressure, not a collision.
+    this.policeBehind = Math.max(POLICE_CLOSEST_M, this.policeBehind - POLICE_CLOSING_MS * dt);
+
+    const spacing = this.approach.spacing;
+    const back = Math.max(0, this.vehicle.trackIndex - this.policeBehind / spacing);
+    const p = this.approach.at(back);
+    car.group.position.copy(p.pos).addScaledVector(p.normal, -1.2);
+    car.group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
+    for (const w of car.wheels) w.rotation.x -= (this.vehicle.speed / 0.33) * dt;
+
+    // Off the public road, off the hook.
+    if (this.phase !== 'approach') {
+      // This one is allowed to interrupt. `setMood` refuses a lesser mood
+      // mid-hold, and relief ranks below panic — but the panic was *about*
+      // this, and reaching the gate quickly would otherwise swallow the payoff
+      // entirely. The situation has changed, so the hold no longer applies.
+      this.moodHold = 0;
+      this.setMood('happy', pick(POLICE_GONE_LINES), 5);
+      this.scene.remove(car.group);
+      car.dispose();
+      this.police = null;
+    }
+  }
 
   // ---------------------------------------------------------------- Dale
   /** What he is saying, and for how much longer. */
@@ -446,6 +533,7 @@ export class Game {
     this.input.onCameraToggle = () => {
       if (!this.paused) this.cycleCamera();
     };
+    this.input.onWheelie = () => this.startWheelie();
     this.input.onReset = () => {
       if (!this.paused) this.recover();
     };
@@ -510,6 +598,7 @@ export class Game {
     this.crowd?.dispose();
     this.crowd = null;
     this.speedCamera?.dispose();
+    this.police?.dispose();
     this.skidMarks?.dispose();
     this.speedCamera = null;
     this.composer.dispose();
@@ -581,7 +670,13 @@ export class Game {
   }
 
   private simulate(dt: number): void {
-    const input = this.input.update(dt);
+    let input = this.input.update(dt);
+
+    if (this.spill) {
+      this.updateSpill(dt);
+      this.updateMood(dt);
+      return;
+    }
 
     if (this.phase === 'departure') {
       this.updateDeparture(dt);
@@ -610,7 +705,14 @@ export class Game {
       }
     }
 
+    // A front wheel in the air steers nothing much, so the input is trimmed
+    // before it reaches the physics rather than after — trimming afterwards
+    // would leave the HUD and the front-wheel visual disagreeing with the car.
+    if (this.wheelieFor > 0) {
+      input = { ...input, steer: input.steer * WHEELIE_STEER };
+    }
     this.telemetry = this.vehicle.step(dt, input, this.road);
+    this.updateWheelie(dt);
     this.topSpeed = Math.max(this.topSpeed, this.telemetry.speedKmh);
 
     this.applyDamage(this.telemetry, dt);
@@ -619,6 +721,7 @@ export class Game {
 
     if (this.phase === 'approach') {
       this.checkSpeedCamera();
+      this.updatePolice(dt);
       this.updateApproach();
     } else {
       if (this.phase === 'timing') this.lapTime += dt;
@@ -662,6 +765,14 @@ export class Game {
     this.damageCost += cost;
     this.damage = Math.min(1, this.damage + v / 110);
     this.vehicle.condition = 1 - this.damage;
+
+    // On the bike a hit hurts the rider rather than the balance sheet, and a
+    // solid one puts him over the bars.
+    if (this.car.bike && v >= SPILL_FROM_MS) {
+      this.riderHurt = Math.min(1, this.riderHurt + v / 26);
+      this.throwRider(v);
+      return;
+    }
 
     if (this.damage >= 1) {
       this.retire();
@@ -718,6 +829,7 @@ export class Game {
     this.fines += fine;
     this.speedCamera.trigger();
     this.setMood('angry', pick(TICKET_LINES), 6);
+    this.sendPolice();
     this.callbacks.onTicket({
       limitKmh: VILLAGE_LIMIT_KMH,
       measuredKmh: Math.round(measured),
@@ -746,6 +858,22 @@ export class Game {
 
     if (this.phase === 'departure' || this.phase === 'approach' || this.phase === 'retired') return;
 
+    // When Herr Müller is the one riding, Dale stops instructing. You do not
+    // instruct a man on his own bike who has ridden here longer than you have
+    // known him — you watch your business partner do something dangerous and
+    // say so, and you say it more often the worse it is going.
+    if (this.car.bike) {
+      this.daleWorryIn -= dt;
+      if (this.daleWorryIn > 0 || this.daleHold > 0) return;
+      const tone =
+        this.riderHurt > 0.62 ? 'alarmed' : this.riderHurt > 0.28 ? 'nervous' : 'calm';
+      this.daleLine = { text: pick(DALE_WORRIED[tone]), kind: tone === 'calm' ? 'line' : 'warn', apologising: false };
+      this.daleHold = DALE_DWELL_SECONDS;
+      // He frets faster the more worried he is.
+      this.daleWorryIn = DALE_WORRY_GAP * (tone === 'alarmed' ? 0.45 : tone === 'nervous' ? 0.7 : 1);
+      return;
+    }
+
     const lookAheadM = Math.max(80, (this.vehicle.speed || 0) * DALE_LOOKAHEAD_SECONDS);
     const ahead = Math.round(lookAheadM / this.track.spacing);
     const coming = this.track.sectionNameAt(this.vehicle.trackIndex + ahead);
@@ -762,6 +890,11 @@ export class Game {
 
   /** He takes the blame with Herr Müller, which is not the same as with you. */
   private daleApologise(): void {
+    // Not on the bike. The apologies are Dale taking the blame with Herr
+    // Müller for the customer's mistakes — with Herr Müller himself riding
+    // there is no customer, and apologising to a man for his own riding is a
+    // different conversation entirely. He worries instead.
+    if (this.car.bike) return;
     if (this.daleApologyCooldown > 0) return;
     this.daleApologyCooldown = DALE_APOLOGY_GAP_SECONDS;
     this.daleLine = { text: pick(DALE_APOLOGIES), kind: 'warn', apologising: true };
@@ -788,7 +921,11 @@ export class Game {
     // watching the wreck sit there and get collected, so it comes back.
     this.cameraMode = 'chase';
     this.carMesh.group.visible = true;
-    this.setMood('angry', this.ranting.retired[0], 99);
+    this.setMood(
+      this.car.bike === true && this.riderHurt >= 1 ? 'scared' : 'angry',
+      this.car.bike === true && this.riderHurt >= 1 ? AMBULANCE_LINES[0] : this.ranting.retired[0],
+      99,
+    );
     // Engine off — the car is not going anywhere under its own power again.
     // The scrape is silenced by hand: `applyDamage` feeds it, and it stops
     // being called the moment the car retires, so whatever it was doing when
@@ -796,9 +933,11 @@ export class Game {
     this.audio.update(0, 0, 0, 0);
     this.audio.scrape(0);
 
-    // The truck comes up the road behind the wreck and stops just short.
+    // The truck comes up the road behind the wreck and stops just short — or
+    // an ambulance does, when it is the rider who has run out rather than the
+    // machine. Same drive-up either way; only the vehicle differs.
     const p = this.track.at(this.vehicle.trackIndex);
-    const truck = buildTowTruck();
+    const truck = this.car.bike === true && this.riderHurt >= 1 ? buildAmbulance() : buildTowTruck();
     truck.group.position.copy(p.pos).addScaledVector(p.tangent, -TOW_APPROACH_M);
     truck.group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
     this.scene.add(truck.group);
@@ -818,11 +957,14 @@ export class Game {
     this.vehicle.position.addScaledVector(this.vehicle.forward, this.vehicle.vLong * dt);
 
     // One line at a time, so it reads as a rant rather than a wall of text.
-    const rant = this.ranting.retired;
+    // Flat on his back beside his own motorcycle, he is not ranting about a
+    // customer — there isn't one. He is talking himself through it.
+    const hurt = this.car.bike === true && this.riderHurt >= 1;
+    const rant = hurt ? AMBULANCE_LINES : this.ranting.retired;
     const wanted = Math.min(rant.length - 1, Math.floor(this.retiredFor / RETIRED_LINE_SECONDS));
     if (wanted !== this.retiredLine) {
       this.retiredLine = wanted;
-      this.setMood('angry', rant[wanted], 99);
+      this.setMood(hurt ? 'scared' : 'angry', rant[wanted], 99);
     }
 
     if (truck) {
@@ -848,10 +990,14 @@ export class Game {
 
     if (!this.retiredReported && this.retiredFor >= rant.length * RETIRED_LINE_SECONDS) {
       this.retiredReported = true;
+      const hurt = this.car.bike === true && this.riderHurt >= 1;
       this.callbacks.onRetired({
         damageCost: Math.round(this.damageCost),
         contacts: this.contacts,
-        banCount: recordBan(),
+        // Nobody gets banned for hurting themselves on their own motorcycle,
+        // so that run does not go on the wall behind the counter.
+        banCount: hurt ? 0 : recordBan(),
+        rider: hurt,
       });
     }
   }
@@ -1188,10 +1334,21 @@ export class Game {
 
   // -------------------------------------------------------------- visuals
   /**
-   * Puts the four contact patches where the wheels actually are and hands them
-   * to the mark buffer. The positions come from the vehicle's own frame rather
-   * than from the wheel meshes: the meshes carry steering and spin, and a
-   * contact patch does neither.
+   * Puts the four contact patches where the wheels actually are and decides,
+   * per wheel, whether anything is being left behind. The positions come from
+   * the vehicle's own frame rather than from the wheel meshes: the meshes
+   * carry steering and spin, and a contact patch does neither.
+   *
+   * Three ways to mark the ground, and only three — the first version marked
+   * continuously from 90 % of grip, which meant a black line down every corner
+   * taken properly. A tyre at the limit is gripping, not abrading.
+   *
+   *  · **Off the circuit.** Grass and gravel churn under any wheel that is
+   *    turning, at any speed. Nothing has to go wrong for a car to leave ruts
+   *    across a verge.
+   *  · **Actually sliding.** On tarmac, past the limit rather than near it.
+   *  · **Wheelspin off the line.** Driven axle only, and it fades out as the
+   *    car gets going, so it is a launch mark and not a trail.
    */
   private layRubber(): void {
     const marks = this.skidMarks;
@@ -1216,8 +1373,42 @@ export class Game {
         );
       }
     }
-    marks.update(this.rubberPoints, fwd, t.gripUsage, t.speedKmh);
+    // Index order above: 0,1 front · 2,3 rear.
+    const w = this.rubberStrength;
+    w[0] = w[1] = w[2] = w[3] = 0;
+
+    if (t.offTrack && t.speedKmh > 3) {
+      const dust = Math.min(1, t.speedKmh / 70);
+      w[0] = w[1] = w[2] = w[3] = dust;
+      marks.update(this.rubberPoints, w, 'dirt');
+      return;
+    }
+
+    // Past the limit, not near it. 1.0 is the limit; below SLIDE_FROM the
+    // tyre is working hard and staying put, which leaves nothing.
+    const sliding = Math.min(1, Math.max(0, (t.gripUsage - SLIDE_FROM) / 0.25));
+    if (sliding > 0 && t.speedKmh > 15) {
+      w[0] = w[1] = w[2] = w[3] = sliding;
+    }
+
+    // Wheelspin: hard throttle, still slow, and the tyre already at its limit.
+    // Gone by SPIN_UNTIL_KMH, so pulling away hard leaves two short stripes
+    // rather than a line all the way down the straight.
+    const spin =
+      this.input.state.throttle > 0.75 && t.gripUsage > 0.95
+        ? Math.max(0, 1 - t.speedKmh / SPIN_UNTIL_KMH)
+        : 0;
+    if (spin > 0) {
+      const drive = this.car.drivetrain;
+      if (drive !== 'RWD') w[0] = w[1] = Math.max(w[0], spin);
+      if (drive !== 'FWD') w[2] = w[3] = Math.max(w[2], spin);
+    }
+
+    marks.update(this.rubberPoints, w, 'rubber');
   }
+
+  /** Reused per frame alongside `rubberPoints`; one entry per wheel. */
+  private readonly rubberStrength = [0, 0, 0, 0];
 
   /** Reused every frame; the mark buffer must not allocate in the hot loop. */
   private readonly rubberPoints = [
@@ -1239,11 +1430,36 @@ export class Game {
     g.position.copy(v.position);
     g.rotation.set(0, 0, 0);
     g.rotateY(v.yaw);
-    g.rotateX(v.pitch);
+    g.rotateX(v.pitch + this.wheelieAngle);
     g.rotateZ(-v.roll);
+
+    // A wheelie pivots about the rear contact patch, not about the model's
+    // origin between the wheels. Rotating about the origin buries the rear
+    // tyre in the tarmac by a quarter of a metre at full lift — the nose does
+    // go up, but the bike sinks, and it reads as the road swallowing it.
+    // Undo the movement the rotation gives that one point.
+    if (this.wheelieAngle !== 0) {
+      const zr = -this.car.wheelbase * 0.5;
+      const sin = Math.sin(this.wheelieAngle);
+      const cos = Math.cos(this.wheelieAngle);
+      const dy = zr * sin;
+      const dz = zr * (1 - cos);
+      const fwd = v.forward;
+      g.position.y += dy;
+      g.position.x += fwd.x * dz;
+      g.position.z += fwd.z * dz;
+    }
 
     const spin = (v.vLong / 0.34) * dt;
     for (const w of this.carMesh.wheels) w.rotation.x -= spin;
+    // Nothing drives the front wheel once it is in the air; it keeps whatever
+    // rotation it had. Backing out the spin it was just given is cheaper than
+    // tracking which wheel is which through the mesh contract.
+    if (this.wheelieAngle < -0.05) {
+      for (const fw of this.carMesh.frontWheels) {
+        for (const child of fw.children) child.rotation.x += spin;
+      }
+    }
     // rotation.y is left-positive, the input is right-positive. During the
     // scripted departure the route steers, not the player.
     const steerInput = this.phase === 'departure' ? this.departureSteer : this.input.state.steer;
@@ -1372,6 +1588,108 @@ export class Game {
     this.camera.lookAt(look);
   }
 
+  /**
+   * Double-tap X on the bike and the front wheel comes up.
+   *
+   * Gated on a speed band rather than allowed anywhere: below WHEELIE_MIN_KMH
+   * there is not enough drive to lift it and it would read as the bike simply
+   * tipping over backwards, and above WHEELIE_MAX_KMH nothing short of a jump
+   * gets a Panigale's nose off the ground. Throttle is required for the same
+   * reason it is required in life.
+   */
+  private startWheelie(): void {
+    if (!this.car.bike || this.wheelieFor > 0) return;
+    if (this.phase === 'departure' || this.phase === 'retired') return;
+    const kmh = this.telemetry?.speedKmh ?? 0;
+    if (kmh < WHEELIE_MIN_KMH || kmh > WHEELIE_MAX_KMH) return;
+    if (this.input.state.throttle < 0.4) return;
+    this.wheelieFor = WHEELIE_SECONDS;
+    this.setMood('cheer', pick(WHEELIE_LINES), 3);
+  }
+
+  /**
+   * Eases the nose up and back down, and drops it early if the rider does
+   * anything that would put it down in life: shuts the throttle, brakes, or
+   * runs out of the speed band.
+   */
+  private updateWheelie(dt: number): void {
+    if (this.wheelieFor > 0) {
+      const kmh = this.telemetry?.speedKmh ?? 0;
+      const bail =
+        this.input.state.throttle < 0.15 ||
+        this.input.state.brake > 0.1 ||
+        kmh < WHEELIE_MIN_KMH * 0.6 ||
+        kmh > WHEELIE_MAX_KMH * 1.15;
+      this.wheelieFor = bail ? 0 : Math.max(0, this.wheelieFor - dt);
+    }
+    const target = this.wheelieFor > 0 ? WHEELIE_ANGLE : 0;
+    // Up quickly, down more gently: a nose that slams back reads as a crash.
+    const rate = this.wheelieFor > 0 ? 5.2 : 2.6;
+    this.wheelieAngle += (target - this.wheelieAngle) * Math.min(1, dt * rate);
+    if (Math.abs(this.wheelieAngle) < 1e-4) this.wheelieAngle = 0;
+  }
+
+  /**
+   * Over the bars. The bike goes down and slides; he goes his own way and
+   * lands somewhere else, which is the whole reason the rider is a separate
+   * object rather than part of the bodywork.
+   */
+  private throwRider(closingSpeed: number): void {
+    const rider = this.carMesh.rider;
+    if (!rider || this.spill) return;
+
+    this.input.captureEnabled = false;
+    this.cameraMode = 'chase';
+    this.wheelieFor = 0;
+    this.audio.impact(Math.min(1, closingSpeed / 18));
+    this.audio.scrape(0);
+
+    // Up and forward, along the way he was already going. A harder hit throws
+    // him further, but not without limit — past about this he is a cartoon.
+    //
+    // The vertical is sized against the flight beat rather than picked: at
+    // gravity 15 a launch of v rises v²/30 and is back down after 2v/15, so
+    // 8.4 m/s gives 2.3 m of air over 1.12 s, which fills the 1.1 s stage
+    // almost exactly. The first attempt used 3.4 and produced a 94 cm hop —
+    // a stumble, not a flight.
+    const speed = Math.min(closingSpeed, 16);
+    const fwd = this.vehicle.forward;
+    const launch = new THREE.Vector3(fwd.x * speed * 0.7, 4.6 + speed * 0.42, fwd.z * speed * 0.7);
+    this.spill = startSpill(rider, this.scene, this.vehicle.position.clone(), launch);
+
+    const bad = this.riderHurt > 0.66;
+    this.setMood('scared', pick(bad ? SPILL_BAD_LINES : SPILL_LINES), 4);
+  }
+
+  /**
+   * Runs the fall. The bike is riderless for the duration and simply slides to
+   * a stop: nothing about the machine is being driven, so nothing about it is
+   * simulated beyond friction.
+   */
+  private updateSpill(dt: number): void {
+    const spill = this.spill;
+    if (!spill) return;
+
+    const v = this.vehicle;
+    v.vLong *= Math.max(0, 1 - dt * 2.2);
+    v.vLat *= Math.max(0, 1 - dt * 3.4);
+    v.yawRate *= Math.max(0, 1 - dt * 3.4);
+    v.position.addScaledVector(v.forward, v.vLong * dt);
+    this.wheelieAngle *= Math.max(0, 1 - dt * 6);
+
+    if (spill.update(dt, v.position)) return;
+
+    spill.finish();
+    this.spill = null;
+    // Hurt enough and he does not get to carry on.
+    if (this.riderHurt >= 1) {
+      this.retire();
+      return;
+    }
+    this.input.captureEnabled = true;
+    this.setMood('idle', pick(REMOUNT_LINES), 4);
+  }
+
   // ----------------------------------------------------------------- misc
   recover(): void {
     // The car is driving itself out of the yard; there is nothing to recover
@@ -1427,6 +1745,7 @@ export class Game {
       sectionName: onRoad ? 'Approach · Burgstrasse' : this.track.sectionNameAt(idx),
       distance: onRoad ? 0 : this.track.distanceAt(idx),
       lapLength: this.track.lapLength,
+      damageIsRider: this.car.bike === true,
       offTrack: t?.offTrack ?? false,
       gripUsage: t?.gripUsage ?? 0,
       lateralG: t?.lateralG ?? 0,
@@ -1438,7 +1757,7 @@ export class Game {
       carPos: { x: this.vehicle.position.x, z: this.vehicle.position.z },
       ghostPos: ghost ? { x: ghost.x, z: ghost.z } : null,
       approachRemaining: this.approachRemaining(),
-      damage: this.damage,
+      damage: this.car.bike ? this.riderHurt : this.damage,
       damageCost: Math.round(this.damageCost),
       muellerMood: this.mood,
       muellerLine: this.moodLine,
@@ -1623,6 +1942,63 @@ const FLOW_LINES = [
  * from the yard and the straightest run on the whole route — 0.8 degrees of
  * direction change over fifteen points.
  */
+/**
+ * What he says lying at the side of the circuit waiting to be collected. The
+ * order matters: the retirement sequence walks this list one line at a time.
+ */
+const AMBULANCE_LINES = [
+  'Do not move me. Do not — right. Someone is moving me.',
+  'Dale. Dale, stop saying you told me. You did tell me. Stop saying it.',
+  'The bike. Is the bike all right. Ask about the bike.',
+  'Fifty-eight years old on a superbike. What did I think was going to happen.',
+  'Should have stayed behind the counter pulling Amex cards through the reader.',
+];
+
+/** Where the patrol car appears behind you, and how close it ever gets. */
+const POLICE_START_BEHIND_M = 90;
+const POLICE_CLOSEST_M = 18;
+/** How fast it eats into that gap, m/s. */
+const POLICE_CLOSING_MS = 7;
+
+/** Herr Müller, watching a patrol car fill the mirror. */
+const POLICE_LINES = [
+  'Blue lights. Go — go, before the constables want money as well.',
+  'That is a patrol car and I am not stopping for it. Neither are you.',
+  'Right. The gate. Get to the gate — they cannot follow us in there.',
+  'Do not stop. Whatever you do, do not stop. They take cash and dignity.',
+];
+/** And once the gate has swallowed you. */
+const POLICE_GONE_LINES = [
+  'And there they stop. Private ground, gentlemen. Wonderful.',
+  'The StVO ends at that barrier. So does their afternoon.',
+  'Look at them turning round. That is the best thing I will see today.',
+];
+
+/** How often Dale frets while Herr Müller is riding, seconds. */
+const DALE_WORRY_GAP = 9;
+
+/** Closing speed into a barrier that puts him over the bars, m/s. */
+const SPILL_FROM_MS = 4.5;
+
+/** The speed band in which the front wheel will actually come up. */
+const WHEELIE_MIN_KMH = 25;
+const WHEELIE_MAX_KMH = 140;
+/** How long he holds it before it comes back down. */
+const WHEELIE_SECONDS = 2.1;
+/** Nose-up angle at full lift. Negative is nose-up (see `pitch` in physics). */
+const WHEELIE_ANGLE = -0.42;
+/**
+ * A front wheel in the air steers nothing. Not zero — the bike still turns by
+ * leaning, and taking the steering away completely made it feel broken rather
+ * than airborne.
+ */
+const WHEELIE_STEER = 0.35;
+
+/** Grip usage past which a tyre is genuinely abrading rather than gripping. */
+const SLIDE_FROM = 1.02;
+/** Wheelspin marks are gone by this road speed, km/h. */
+const SPIN_UNTIL_KMH = 45;
+
 const SPEED_CAMERA_INDEX = 46;
 /** Built-up area, so 50. */
 const VILLAGE_LIMIT_KMH = 50;
@@ -1695,6 +2071,36 @@ function recordBan(): number {
  * So the rant turns inward, which is funnier and, by his own account,
  * entirely deserved.
  */
+/** What he says with the front wheel in the air. He is delighted and appalled. */
+/** Coming off, and not badly hurt yet. */
+const SPILL_LINES = [
+  'Ohhh. That is the gravel. That is definitely the gravel.',
+  'I am fine. Nothing is broken that was not already.',
+  'Do not tell Dale. Dale worries.',
+  'The bike is fine. I am the crumple zone.',
+];
+/** Coming off when he is already in a bad way. */
+const SPILL_BAD_LINES = [
+  'That one hurt in a new place.',
+  'Right. Right. Give me a moment.',
+  'I am getting too old to land like that.',
+];
+/** Back on the bike, dusting himself down. */
+const REMOUNT_LINES = [
+  'Nothing to see. Back on. The leathers took most of it.',
+  'That was a controlled dismount. I meant most of that.',
+  'Up we get. This is why the suit costs what it costs.',
+  'If anyone asks, the bike slid out on its own.',
+];
+
+const WHEELIE_LINES = [
+  'Front wheel up! Do not tell the insurer. Do not tell Dale either.',
+  'This is a demonstration of throttle control. That is what it says on the invoice.',
+  'Look at that. Fifty-eight years old and still an idiot.',
+  'One wheel does the work, the other one watches. Marvellous.',
+  'If it comes down sideways we never did this.',
+];
+
 const SELF_ANGRY_LINES = [
   'MUELLER! What in the name of God was that?',
   'Twenty-six years. Twenty-six years and I still do that.',

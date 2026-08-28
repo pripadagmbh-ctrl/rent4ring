@@ -3283,3 +3283,41 @@
     align-items: flex-start;
   }
 }
+
+/* The bar means a person now, not a repair bill — so it warms from green
+   through to the red of an ambulance rather than staying the billing colour. */
+.mueller__damage-fill.is-rider {
+  background: linear-gradient(90deg, var(--green), var(--gold) 55%, var(--red));
+}
+
+/* With Herr Müller riding, Dale is the one you watch. He is not calling the
+   corner any more — he is standing at the pit wall worrying about his
+   business partner, so he gets the room and the emphasis to match. */
+.dale-call.is-watching {
+  border-color: rgba(229, 20, 43, 0.5);
+  background: rgba(229, 20, 43, 0.08);
+}
+
+.dale-call.is-watching .dale-call__fig {
+  width: 76px;
+  flex-basis: 76px;
+}
+
+.dale-call.is-watching .dale-call__text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dale-call.is-watching .dale-call__who {
+  color: var(--red);
+}
+
+@media (max-width: 900px), (max-height: 700px) {
+  .dale-call.is-watching .dale-call__fig {
+    width: 54px;
+    flex-basis: 54px;
+  }
+  .dale-call.is-watching .dale-call__text {
+    font-size: 12px;
+  }
+}

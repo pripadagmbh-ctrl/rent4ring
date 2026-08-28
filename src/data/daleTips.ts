@@ -143,3 +143,34 @@ export const DALE_GARAGE = [
   'Müller and I have an understanding: I bring the cars back, he keeps the coffee coming.',
   'If I say lift, lift. We can discuss why afterwards, over that coffee.',
 ];
+
+/**
+ * What Dale says when Herr Müller is the one riding.
+ *
+ * He is not instructing now — you cannot instruct a man on his own bike who
+ * has been riding this circuit since before you met him. He is watching his
+ * business partner do something dangerous, and the tone follows how badly it
+ * is going. The last set is what you say when you have stopped pretending it
+ * is fine.
+ */
+export const DALE_WORRIED: Record<'calm' | 'nervous' | 'alarmed', string[]> = {
+  calm: [
+    'He rides it well, I will give him that. I still wish he would not.',
+    'Fifty-eight, and he still takes Flugplatz like that. Somebody talk to him.',
+    'Every time he takes that thing out I check the insurance again.',
+    'Look at him. Happy as anything. Terrifying.',
+    'If he comes off, I run the shop alone. I do not want to run the shop alone.',
+  ],
+  nervous: [
+    'Müller. Müller, ease up. That is not a suggestion.',
+    'He is riding angry now. That never ends well on two wheels.',
+    'Please. Please just bring it back in one piece. Both of you.',
+    'I have seen him do this before. I did not enjoy it then either.',
+  ],
+  alarmed: [
+    'Müller, stop. Pull in. I am asking you as your partner, not your friend.',
+    'That is enough. He is going to hurt himself properly.',
+    'I am calling someone. I am actually calling someone this time.',
+    'Get off the bike. Get off the bike, Müller.',
+  ],
+};

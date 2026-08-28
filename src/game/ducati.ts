@@ -22,6 +22,8 @@ export interface BikeMesh {
   wheels: THREE.Object3D[];
   frontWheels: THREE.Object3D[];
   brakeLights: THREE.Mesh;
+  /** Herr Müller himself, so the game can throw him off and put him back. */
+  rider?: THREE.Object3D;
   setDamage(amount: number): void;
   dispose(): void;
 }
@@ -29,7 +31,7 @@ export interface BikeMesh {
 interface Options {
   /** Rear paddock stand and a nose-down attitude, for the showroom floor. */
   stand?: boolean;
-  /** Herr Müller tucked over the tank. */
+  /** Herr Müller aboard, in leathers that no longer fit him. */
   rider?: boolean;
   /** Translucent, for the lap ghost. */
   ghost?: boolean;
@@ -369,7 +371,11 @@ export function buildDucatiPanigale(options: Options = {}): BikeMesh {
   chassis.add(rear.pivot);
 
   // ------------------------------------------------------------- the rider
-  if (options.rider) chassis.add(buildRider(keep));
+  let rider: THREE.Group | undefined;
+  if (options.rider) {
+    rider = buildRider(keep);
+    chassis.add(rider);
+  }
 
   // ------------------------------------------------------------ assembly
   const group = new THREE.Group();
@@ -406,6 +412,7 @@ export function buildDucatiPanigale(options: Options = {}): BikeMesh {
     wheels: [front.spin, rear.spin],
     frontWheels: [steerHead],
     brakeLights: tailLight,
+    rider,
     setDamage(amount: number) {
       const a = THREE.MathUtils.clamp(amount, 0, 1);
       // Paint dulls and greys off, same idea as the cars.
@@ -427,16 +434,36 @@ export function buildDucatiPanigale(options: Options = {}): BikeMesh {
 }
 
 /**
- * Herr Müller in the tuck: knees into the tank cutouts, elbows down, chin
- * over the yoke. Deliberately blocky — at racing distance a rider is a
- * silhouette, and a detailed one would out-detail the bike underneath him.
+ * Herr Müller on his own bike, in leathers that stopped fitting some years
+ * ago.
+ *
+ * The rider used to be an anonymous racer folded into a textbook tuck —
+ * correct, and nobody. Two things had to change for him to read as himself.
+ *
+ * **The build.** He is a gorilla: chest and shoulders far wider than a man's,
+ * arms longer and thicker, legs short. That silhouette alone identifies him
+ * from behind at speed, which is the only angle most of the drive offers.
+ *
+ * **The fit.** A suit that is merely snug reads as a suit. A suit that has
+ * lost is one you can see losing: fur forced out at the collar, the cuffs, the
+ * ankles and the waist, where the leather simply runs out and gives up. The
+ * stretched panels are a lighter, shinier red than the rest for the same
+ * reason real leather goes pale over a strain.
+ *
+ * And he cannot tuck. Sitting him upright with his knees out is what sells the
+ * whole thing — the bike is the right size and the man is not.
  */
 function buildRider(keep: <T extends { dispose(): void }>(x: T) => T): THREE.Group {
   const g = new THREE.Group();
-  const leather = keep(new THREE.MeshStandardMaterial({ color: 0x27385a, roughness: 0.45 }));
-  const stripe = keep(new THREE.MeshStandardMaterial({ color: 0xc81420, roughness: 0.5 }));
+  // The shop's own red, because of course he had them made in it.
+  const leather = keep(new THREE.MeshStandardMaterial({ color: 0xb01220, roughness: 0.34 }));
+  // Leather under strain goes pale and shiny. Used only where he is widest.
+  const strained = keep(new THREE.MeshStandardMaterial({ color: 0xd8404a, roughness: 0.2 }));
+  const panel = keep(new THREE.MeshStandardMaterial({ color: 0x1b2027, roughness: 0.45 }));
+  const fur = keep(new THREE.MeshStandardMaterial({ color: 0x7d7268, roughness: 0.95 }));
+  const face = keep(new THREE.MeshStandardMaterial({ color: 0xa8907c, roughness: 0.8 }));
   const helmet = keep(new THREE.MeshStandardMaterial({ color: 0xe8e6e0, roughness: 0.28 }));
-  const visor = keep(new THREE.MeshStandardMaterial({ color: 0x14181d, roughness: 0.1, metalness: 0.4 }));
+  const dark = keep(new THREE.MeshStandardMaterial({ color: 0x14181d, roughness: 0.5 }));
   const glove = keep(new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.6 }));
 
   const part = (geo: THREE.BufferGeometry, mat: THREE.Material) => {
@@ -445,48 +472,91 @@ function buildRider(keep: <T extends { dispose(): void }>(x: T) => T): THREE.Gro
     return m;
   };
 
-  // Torso, folded forward over the tank.
-  const torso = part(new THREE.BoxGeometry(0.36, 0.5, 0.34), leather);
-  torso.position.set(0, 1.09, -0.2);
-  torso.rotation.x = -0.62;
-  const back = part(new THREE.BoxGeometry(0.3, 0.06, 0.22), stripe);
-  back.position.set(0, 1.24, -0.28);
-  back.rotation.x = -0.62;
-  // Hump on the shoulders, which every set of leathers has.
-  const hump = part(new THREE.SphereGeometry(0.11, 10, 8), leather);
-  hump.position.set(0, 1.3, -0.34);
-  hump.scale.set(1, 0.7, 1.5);
-
-  // Head and helmet, chin down towards the screen.
-  const lid = part(new THREE.SphereGeometry(0.135, 14, 12), helmet);
-  lid.position.set(0, 1.34, 0.06);
-  const chin = part(new THREE.BoxGeometry(0.2, 0.11, 0.13), helmet);
-  chin.position.set(0, 1.27, 0.16);
-  const slit = part(new THREE.BoxGeometry(0.19, 0.08, 0.05), visor);
-  slit.position.set(0, 1.35, 0.17);
-
-  // Arms reaching down to the clip-ons.
+  // ------------------------------------------------------------ the torso
+  // Barrel chest, only slightly forward: he has neither the flexibility nor
+  // the intention to fold himself over that tank.
+  const chest = part(new THREE.BoxGeometry(0.58, 0.44, 0.42), leather);
+  chest.position.set(0, 1.18, -0.24);
+  chest.rotation.x = -0.24;
+  // The bit the zip is losing to, bulging past the jacket on both sides.
+  const belly = part(new THREE.SphereGeometry(0.24, 14, 10), strained);
+  belly.position.set(0, 1.02, -0.16);
+  belly.scale.set(1.16, 0.82, 0.92);
+  // Shoulders a man does not have.
   for (const s of [-1, 1]) {
-    const upper = part(new THREE.CylinderGeometry(0.052, 0.046, 0.3, 8), leather);
-    upper.position.set(s * 0.17, 1.14, 0.06);
-    upper.rotation.set(-0.95, 0, s * 0.12);
-    const fore = part(new THREE.CylinderGeometry(0.044, 0.038, 0.3, 8), leather);
-    fore.position.set(s * 0.23, 0.99, 0.31);
-    fore.rotation.set(-1.25, 0, s * 0.2);
-    const hand = part(new THREE.BoxGeometry(0.07, 0.07, 0.1), glove);
-    hand.position.set(s * 0.28, 0.9, 0.44);
+    const delt = part(new THREE.SphereGeometry(0.15, 12, 10), strained);
+    delt.position.set(s * 0.29, 1.28, -0.24);
+    delt.scale.set(1, 0.9, 1.05);
+  }
+  // The hump every set of leathers has, oversized like the rest of him.
+  const hump = part(new THREE.SphereGeometry(0.15, 10, 8), leather);
+  hump.position.set(0, 1.36, -0.42);
+  hump.scale.set(1.1, 0.62, 1.45);
+  // Waist: the leather runs out here and fur takes over for a few centimetres.
+  const gut = part(new THREE.CylinderGeometry(0.235, 0.225, 0.09, 14), fur);
+  gut.position.set(0, 0.87, -0.16);
+  const belt = part(new THREE.CylinderGeometry(0.24, 0.24, 0.06, 14), panel);
+  belt.position.set(0, 0.81, -0.16);
+
+  // ------------------------------------------------------------- the head
+  // Open face. A full-face lid does not go over that head, which is the same
+  // joke as the suit and the reason you can tell who is riding.
+  const skull = part(new THREE.SphereGeometry(0.16, 14, 12), fur);
+  skull.position.set(0, 1.5, -0.16);
+  skull.scale.set(1, 0.98, 1.05);
+  const brow = part(new THREE.BoxGeometry(0.27, 0.07, 0.1), fur);
+  brow.position.set(0, 1.5, -0.03);
+  const muzzle = part(new THREE.SphereGeometry(0.105, 12, 10), face);
+  muzzle.position.set(0, 1.43, 0.0);
+  muzzle.scale.set(1.05, 0.72, 0.95);
+  for (const s of [-1, 1]) {
+    const eye = part(new THREE.SphereGeometry(0.022, 8, 8), dark);
+    eye.position.set(s * 0.062, 1.52, -0.02);
+    const ear = part(new THREE.SphereGeometry(0.045, 8, 8), fur);
+    ear.position.set(s * 0.16, 1.5, -0.19);
+    ear.scale.set(0.5, 1, 1);
+  }
+  // Open-face shell, sitting on top of the skull and stopping above the brow.
+  const lid = part(new THREE.SphereGeometry(0.185, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), helmet);
+  lid.position.set(0, 1.5, -0.16);
+  const peak = part(new THREE.BoxGeometry(0.3, 0.03, 0.13), dark);
+  peak.position.set(0, 1.56, -0.03);
+  peak.rotation.x = 0.12;
+
+  // ------------------------------------------------------------- the arms
+  // Long and thick, elbows out because there is no room to bring them in.
+  for (const s of [-1, 1]) {
+    const upper = part(new THREE.CylinderGeometry(0.085, 0.072, 0.34, 10), leather);
+    upper.position.set(s * 0.31, 1.13, -0.11);
+    upper.rotation.set(-0.7, 0, s * 0.34);
+    const fore = part(new THREE.CylinderGeometry(0.068, 0.055, 0.36, 10), leather);
+    fore.position.set(s * 0.33, 0.95, 0.23);
+    fore.rotation.set(-1.22, 0, s * 0.16);
+    // The cuff gave up: a ring of fur before the glove starts.
+    const cuff = part(new THREE.CylinderGeometry(0.062, 0.058, 0.07, 10), fur);
+    cuff.position.set(s * 0.32, 0.87, 0.38);
+    cuff.rotation.set(-1.22, 0, s * 0.16);
+    // Measured onto the grip rather than guessed: at (0.31, 0.87, 0.44) the
+    // glove closed on thin air seven centimetres above and behind the bar.
+    const hand = part(new THREE.BoxGeometry(0.1, 0.09, 0.12), glove);
+    hand.position.set(s * 0.3, 0.81, 0.49);
   }
 
-  // Legs, knees tucked into the tank recesses, boots on the rearsets.
+  // ------------------------------------------------------------- the legs
+  // Short, and splayed wide: the knee never gets near the tank recess it was
+  // designed for.
   for (const s of [-1, 1]) {
-    const thigh = part(new THREE.CylinderGeometry(0.075, 0.062, 0.34, 8), leather);
-    thigh.position.set(s * 0.15, 0.94, -0.34);
-    thigh.rotation.set(0.55, 0, s * 0.16);
-    const shin = part(new THREE.CylinderGeometry(0.055, 0.045, 0.32, 8), leather);
-    shin.position.set(s * 0.2, 0.66, -0.31);
-    shin.rotation.set(-0.5, 0, s * 0.1);
-    const boot = part(new THREE.BoxGeometry(0.09, 0.08, 0.19), glove);
-    boot.position.set(s * 0.2, 0.45, -0.24);
+    const thigh = part(new THREE.CylinderGeometry(0.115, 0.09, 0.3, 10), strained);
+    thigh.position.set(s * 0.21, 0.83, -0.35);
+    thigh.rotation.set(0.62, 0, s * 0.42);
+    const shin = part(new THREE.CylinderGeometry(0.075, 0.06, 0.3, 10), leather);
+    shin.position.set(s * 0.27, 0.6, -0.3);
+    shin.rotation.set(-0.42, 0, s * 0.14);
+    // Same story at the ankle.
+    const sock = part(new THREE.CylinderGeometry(0.062, 0.058, 0.06, 10), fur);
+    sock.position.set(s * 0.25, 0.48, -0.27);
+    const boot = part(new THREE.BoxGeometry(0.11, 0.09, 0.21), glove);
+    boot.position.set(s * 0.25, 0.43, -0.23);
   }
 
   return g;

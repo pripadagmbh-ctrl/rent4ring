@@ -26,6 +26,57 @@ export default function BanScreen({ car, result, onGarage }: Props) {
     maximumFractionDigits: 0,
   });
 
+  // Herr Müller hurt himself on his own bike. There is no customer to throw
+  // out, no paperwork to tear up and no yard scene — just a man who has been
+  // to hospital and would like you to know he regrets it.
+  if (result.rider) {
+    return (
+      <div className="overlay ban">
+        <div className="ban__card">
+          <div className="ban__kicker">Ambulance</div>
+          <h2 className="ban__title">They took him in</h2>
+
+          <p className="ban__body">
+            The Panigale is on its side at the edge of the circuit and Herr Müller went to
+            Adenau in the back of an ambulance, complaining the entire way. Dale followed in
+            the van and has not stopped saying he told him so.
+          </p>
+
+          <div className="ban__figures">
+            <div>
+              <b>{result.contacts}</b>
+              <span>Offs</span>
+            </div>
+            <div>
+              <b>2</b>
+              <span>In plaster</span>
+            </div>
+            <div>
+              <b>6&nbsp;wk</b>
+              <span>Off the bike</span>
+            </div>
+          </div>
+
+          <div className="ban__pair">
+            <Gorilla mood="scared" injured className="ban__fig" />
+            <Barbet className="ban__dog" />
+            <div className="ban__speech">
+              <strong>Herr Müller</strong>
+              Should have stayed behind the counter, should I not. Pulling Amex cards through
+              the reader. Nobody has ever broken a collarbone doing that.
+            </div>
+          </div>
+
+          <div className="dialog__actions">
+            <button className="btn-primary" onClick={onGarage}>
+              Back to the garage
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!scenePlayed) {
     return (
       <div className="overlay ban">

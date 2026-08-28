@@ -9,6 +9,12 @@ export interface CarMesh {
   brakeLights: THREE.Mesh;
   /** Apply 0–1 bodywork damage: paint dulls, panels sag, glass crazes. */
   setDamage(amount: number): void;
+  /**
+   * The rider, on vehicles that have one. Handed out so the game can take him
+   * off and put him back on — a fall is the rider leaving the machine, and
+   * that is not something the machine can animate from the inside.
+   */
+  rider?: THREE.Object3D;
   dispose(): void;
 }
 

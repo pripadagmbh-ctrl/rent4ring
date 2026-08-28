@@ -54,10 +54,42 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Geändert
 
-- **Reifenspuren auf der Strecke.** Wo die Reifen loslassen, bleibt Gummi
-  liegen — gesteuert von derselben Grip-Zahl wie das Quietschen, damit Bild und
-  Ton nie etwas Unterschiedliches behaupten. Als ein vorab angelegter
-  Ringpuffer gebaut, der nach dem Start nichts mehr allokiert.
+- **Herr Müller sitzt selbst auf der Panigale.** Der Fahrer war bisher ein
+  anonymer Rennfahrer in der Lehrbuch-Hocke — korrekt und niemand. Jetzt ist es
+  er: Gorillabau mit Schultern, die kein Mensch hat, in einem Lederkombi, der
+  vor Jahren aufgehört hat zu passen. Am Kragen, an den Bündchen, an den
+  Fußgelenken und in der Taille quillt das Fell heraus, wo das Leder schlicht
+  ausgeht; die überdehnten Partien sind heller und glänzender als der Rest,
+  weil echtes Leder über einer Spannung ausbleicht. Offener Helm, weil über
+  diesen Kopf keiner geht — deshalb erkennt man ihn auch. Und er kann sich
+  nicht ducken: er sitzt aufrecht, Knie nach außen. Das Motorrad hat die
+  richtige Größe, der Mann nicht.
+- **Reifenspuren auf der Strecke**, und zwar nur da, wo wirklich etwas
+  passiert: im Gras und im Kies bei jedem Tempo, auf Asphalt erst jenseits der
+  Haftgrenze, und beim Anfahren zwei kurze Streifen der Antriebsachse, die mit
+  dem Tempo verschwinden. Als ein vorab angelegter Ringpuffer gebaut, der nach
+  dem Start nichts mehr allokiert.
+- **Herr Müller kann abfliegen.** Ein harter Einschlag auf dem Motorrad wirft
+  ihn über den Lenker: Flug, liegen bleiben, aufstehen, abschütteln,
+  zurückgehen, aufsteigen. Höhe und Weite hängen an der Wucht — bei 58 km/h
+  Anprall 4,2 m hoch und 12,8 m weit.
+- **Der Schadensbalken ist auf dem Motorrad er selbst**, nicht die Maschine:
+  die Panigale gehört ihm, eine Rechnung an sich selbst entscheidet nichts. Er
+  zählt in seinen Worten von *Fine* bis *Ambulance*.
+- **Dale sorgt sich**, statt zu instruieren, sobald Herr Müller fährt. Drei
+  Tonlagen, die am Zustand seines Geschäftspartners hängen, und er meldet sich
+  umso häufiger, je schlimmer es steht.
+- **Der Krankenwagen.** Ist der Balken voll, endet die Fahrt nicht mit einer
+  schwarzen Flagge, sondern in Adenau — Herr Müller mit Bein und Arm in Gips,
+  Schulterstütze und Pflastern: „Should have stayed behind the counter pulling
+  Amex cards through the reader."
+- **Polizei nach dem Blitzer.** Wer geblitzt wird, bekommt Blaulicht in den
+  Rückspiegel. Die Streife gibt am Streckentor auf — die StVO endet an der
+  Schranke, und Herr Müller sagt genau das.
+- **Wheelie auf dem Motorrad**: zweimal kurz hintereinander X. Braucht Gas und
+  ein Tempo zwischen 25 und 140 km/h; Gas weg oder Bremse antippen und das Rad
+  kommt sofort wieder herunter. Solange es oben ist, lenkt das Vorderrad fast
+  nichts mehr.
 - **Schäden am Auto deutlich sichtbarer.** Kleine Anbauteile — Splitter,
   Grill, Scheinwerfer, Flügel — verziehen sich jetzt stärker als die Karosse,
   weil ein Rempler genau die zuerst erwischt. Bis zu 10,5 cm Versatz statt

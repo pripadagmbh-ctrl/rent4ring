@@ -79,6 +79,7 @@ const EMPTY_HUD: HudState = {
   // shows the old distance for the first frame of every drive.
   approachRemaining: approachData.length,
   damage: 0,
+  damageIsRider: false,
   damageCost: 0,
   muellerMood: 'idle',
   muellerLine: 'Right then. Down the Burgstrasse and up to the Ring — mind the kerbs.',
