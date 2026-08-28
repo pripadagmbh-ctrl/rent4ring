@@ -121,6 +121,15 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Behoben
 
+- **Dales Ansagen verdeckten die Bahn.** Sein Kasten hatte `width: 100%`, saß
+  aber in einer absolut positionierten Schiene ohne Breitenangabe — die wuchs
+  also mit dem Text mit. Gemessen: 742 px auf einem 1440er Bildschirm, mehr als
+  die halbe Bildbreite, quer über die Strecke gelegt. Jetzt hängen er und Herr
+  Müller an derselben Spaltenbreite: 208 × 115 px statt 742 × 66, rechter Rand
+  bei 226 statt 760 px. Auf dem Motorrad, wo er fast ununterbrochen redet, war
+  der Kasten von mir zusätzlich vergrößert worden; die Betonung trägt jetzt die
+  Farbe statt der Fläche. Auf engen Schirmen gibt er sein Porträt ab und
+  überlässt die Breite dem Text.
 - **Autos neigten sich in die Kurve statt aus ihr heraus.** Gemessen am
   GT3 RS bei 0,7 g: das Dach kippte um 0,032 nach innen. Das ist das Verhalten
   eines Motorrads auf einem Fahrzeug, das es nicht kann — die Masse sitzt über

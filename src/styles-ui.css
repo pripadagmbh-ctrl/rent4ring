@@ -581,7 +581,7 @@
 /* ========================================================= Mueller HUD panel */
 /* Positioned by .hud__rail, not on its own — see the rail's comment. */
 .mueller {
-  width: 208px;
+  width: var(--hud-col);
   background: rgba(8, 11, 15, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
@@ -1494,8 +1494,13 @@
    Kept off narrow portrait phones, where a panel this wide would be most of
    the screen. */
 @media (max-height: 700px) and (min-width: 600px) {
+  /* Landscape on a phone: the panel turns on its side and needs the room, so
+     the whole column widens with it rather than clipping him to the portrait
+     width. */
+  :root {
+    --hud-col: min(420px, 52vw);
+  }
   .mueller {
-    width: min(420px, 52vw);
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
@@ -3265,36 +3270,20 @@
   background: linear-gradient(90deg, var(--green), var(--gold) 55%, var(--red));
 }
 
-/* With Herr Müller riding, Dale is the one you watch. He is not calling the
-   corner any more — he is standing at the pit wall worrying about his
-   business partner, so he gets the room and the emphasis to match. */
+/* With Herr Müller riding, Dale is the one you watch — but he is also talking
+   almost continuously, and prominence bought with screen area is prominence
+   taken from the road. The first attempt enlarged the figure to 76 px and the
+   text to 14 px, which on the bike meant a permanently larger block over the
+   track. The emphasis is carried by colour instead: same footprint, unmistakably
+   his moment. */
 .dale-call.is-watching {
   border-color: rgba(229, 20, 43, 0.5);
+  border-left-color: var(--red);
   background: rgba(229, 20, 43, 0.08);
-}
-
-.dale-call.is-watching .dale-call__fig {
-  width: 76px;
-  flex-basis: 76px;
-}
-
-.dale-call.is-watching .dale-call__text {
-  font-size: 14px;
-  line-height: 1.5;
 }
 
 .dale-call.is-watching .dale-call__who {
   color: var(--red);
-}
-
-@media (max-width: 900px), (max-height: 700px) {
-  .dale-call.is-watching .dale-call__fig {
-    width: 54px;
-    flex-basis: 54px;
-  }
-  .dale-call.is-watching .dale-call__text {
-    font-size: 12px;
-  }
 }
 
 /* ------------------------------------------------- the enclosed photograph */
@@ -3401,4 +3390,18 @@
   font-size: 10px;
   letter-spacing: 0.05em;
   color: var(--muted);
+}
+
+/* Where the column is a large share of a small screen, Dale gives up his
+   portrait. It is the part of him that carries no information — the same
+   trade Herr Müller's panel already makes — and handing the width back to the
+   text turns a tall block into a short one without cutting a word of the
+   call, which for an instruction would be worse than no call at all. */
+@media (max-width: 560px), (max-height: 700px) {
+  .dale-call__fig {
+    display: none;
+  }
+  .dale-call {
+    padding: 7px 10px;
+  }
 }
