@@ -17,6 +17,7 @@ import { buildCrowd, type Crowd } from './crowd';
 import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
 import { buildSkidMarks, type SkidMarks } from './skidmarks';
 import { startSpill, type Spill } from './spill';
+import { buildAmbulance } from './ambulance';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -73,6 +74,12 @@ export interface Retirement {
   contacts: number;
   /** How many times this browser has now been thrown out. */
   banCount: number;
+  /**
+   * True when it was Herr Müller who ran out, not the car. Then there is no
+   * ban to hand out — it is his bike and his fault — and an ambulance comes
+   * instead of the recovery truck.
+   */
+  rider: boolean;
 }
 
 export interface HudState {
@@ -852,7 +859,11 @@ export class Game {
     // watching the wreck sit there and get collected, so it comes back.
     this.cameraMode = 'chase';
     this.carMesh.group.visible = true;
-    this.setMood('angry', this.ranting.retired[0], 99);
+    this.setMood(
+      this.car.bike === true && this.riderHurt >= 1 ? 'scared' : 'angry',
+      this.car.bike === true && this.riderHurt >= 1 ? AMBULANCE_LINES[0] : this.ranting.retired[0],
+      99,
+    );
     // Engine off — the car is not going anywhere under its own power again.
     // The scrape is silenced by hand: `applyDamage` feeds it, and it stops
     // being called the moment the car retires, so whatever it was doing when
@@ -860,9 +871,11 @@ export class Game {
     this.audio.update(0, 0, 0, 0);
     this.audio.scrape(0);
 
-    // The truck comes up the road behind the wreck and stops just short.
+    // The truck comes up the road behind the wreck and stops just short — or
+    // an ambulance does, when it is the rider who has run out rather than the
+    // machine. Same drive-up either way; only the vehicle differs.
     const p = this.track.at(this.vehicle.trackIndex);
-    const truck = buildTowTruck();
+    const truck = this.car.bike === true && this.riderHurt >= 1 ? buildAmbulance() : buildTowTruck();
     truck.group.position.copy(p.pos).addScaledVector(p.tangent, -TOW_APPROACH_M);
     truck.group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
     this.scene.add(truck.group);
@@ -882,11 +895,14 @@ export class Game {
     this.vehicle.position.addScaledVector(this.vehicle.forward, this.vehicle.vLong * dt);
 
     // One line at a time, so it reads as a rant rather than a wall of text.
-    const rant = this.ranting.retired;
+    // Flat on his back beside his own motorcycle, he is not ranting about a
+    // customer — there isn't one. He is talking himself through it.
+    const hurt = this.car.bike === true && this.riderHurt >= 1;
+    const rant = hurt ? AMBULANCE_LINES : this.ranting.retired;
     const wanted = Math.min(rant.length - 1, Math.floor(this.retiredFor / RETIRED_LINE_SECONDS));
     if (wanted !== this.retiredLine) {
       this.retiredLine = wanted;
-      this.setMood('angry', rant[wanted], 99);
+      this.setMood(hurt ? 'scared' : 'angry', rant[wanted], 99);
     }
 
     if (truck) {
@@ -912,10 +928,14 @@ export class Game {
 
     if (!this.retiredReported && this.retiredFor >= rant.length * RETIRED_LINE_SECONDS) {
       this.retiredReported = true;
+      const hurt = this.car.bike === true && this.riderHurt >= 1;
       this.callbacks.onRetired({
         damageCost: Math.round(this.damageCost),
         contacts: this.contacts,
-        banCount: recordBan(),
+        // Nobody gets banned for hurting themselves on their own motorcycle,
+        // so that run does not go on the wall behind the counter.
+        banCount: hurt ? 0 : recordBan(),
+        rider: hurt,
       });
     }
   }
@@ -1860,6 +1880,18 @@ const FLOW_LINES = [
  * from the yard and the straightest run on the whole route — 0.8 degrees of
  * direction change over fifteen points.
  */
+/**
+ * What he says lying at the side of the circuit waiting to be collected. The
+ * order matters: the retirement sequence walks this list one line at a time.
+ */
+const AMBULANCE_LINES = [
+  'Do not move me. Do not — right. Someone is moving me.',
+  'Dale. Dale, stop saying you told me. You did tell me. Stop saying it.',
+  'The bike. Is the bike all right. Ask about the bike.',
+  'Fifty-eight years old on a superbike. What did I think was going to happen.',
+  'Should have stayed behind the counter pulling Amex cards through the reader.',
+];
+
 /** How often Dale frets while Herr Müller is riding, seconds. */
 const DALE_WORRY_GAP = 9;
 

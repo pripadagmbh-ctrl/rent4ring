@@ -14,6 +14,13 @@ interface Props {
   gesture?: Gesture;
   /** Animates the jaw, for while a line of his is being shown. */
   talking?: boolean;
+  /**
+   * Straight out of the ambulance: leg and arm in plaster, shoulder braced,
+   * plasters on his face. Drawn as a layer over the finished figure rather
+   * than woven into it — a cast goes on top of a man, and keeping it separate
+   * means the ordinary Herr Müller is untouched by any of it.
+   */
+  injured?: boolean;
   className?: string;
 }
 
@@ -30,6 +37,7 @@ export default function Gorilla({
   trophy = false,
   gesture = 'none',
   talking = false,
+  injured = false,
   className,
 }: Props) {
   const classes = [
@@ -37,6 +45,7 @@ export default function Gorilla({
     `gorilla--${mood}`,
     gesture !== 'none' && `gorilla--g-${gesture}`,
     talking && 'gorilla--talking',
+    injured && 'gorilla--injured',
     className,
   ]
     .filter(Boolean)
@@ -329,6 +338,39 @@ export default function Gorilla({
           <path className="gorilla__sweat" d="M165 28c0 0 5 7 5 10a5 5 0 0 1-10 0c0-3 5-10 5-10z" fill="#9fd4f5" />
         </g>
       </g>
+
+      {injured && (
+        <g className="gorilla__injuries">
+          {/* Right leg in plaster, over the jeans and down into the trainer. */}
+          <path d="M143 152h34l5 40c1 9-6 15-17 15s-18-6-17-15z" fill="#eeece4" />
+          <path d="M143 152h34l1 7h-36z" fill="#dbd8ce" />
+          {/* The ridges a wrapped cast always has. */}
+          <path d="M145 170h30M146 182h29M147 194h27" stroke="#d0ccc1" strokeWidth="1.6" fill="none" />
+          {/* Somebody has signed it. Dale, obviously. */}
+          <path d="M152 176c4-4 8 3 11-1s5 2 9-1" stroke="#3b6ea8" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+
+          {/* Left forearm in plaster, from below the elbow to the knuckles. */}
+          <path d="M50 146c12-4 26-4 36 1l4 40c1 7-7 12-17 12s-19-5-19-12z" fill="#eeece4" />
+          <path d="M50 146c12-4 26-4 36 1l1 7c-12-5-25-5-37-1z" fill="#dbd8ce" />
+          <path d="M54 166h30M55 180h29" stroke="#d0ccc1" strokeWidth="1.6" fill="none" />
+
+          {/* Sling holding that arm, strapped across the chest. */}
+          <path d="M104 100l58 34-6 11-58-34z" fill="#c8ccd4" opacity="0.92" />
+          <path d="M50 140c18-8 40-8 44 4-14-6-30-6-44 4z" fill="#c8ccd4" opacity="0.92" />
+
+          {/* Shoulder brace: collar and two straps. */}
+          <path d="M96 92h68v14H96z" fill="#e6e3da" />
+          <path d="M96 92h68v4H96z" fill="#cfccc2" />
+          <path d="M104 106l10 26M156 106l-10 26" stroke="#cfccc2" strokeWidth="6" fill="none" strokeLinecap="round" />
+
+          {/* Plasters: two on the cheek, crossed, and one over the brow. */}
+          <g>
+            <rect x="148" y="60" width="20" height="7" rx="2" fill="#e8c9a4" transform="rotate(18 158 63)" />
+            <rect x="150" y="58" width="20" height="7" rx="2" fill="#e8c9a4" transform="rotate(-24 160 61)" />
+            <rect x="96" y="40" width="22" height="8" rx="2" fill="#e8c9a4" transform="rotate(-8 107 44)" />
+          </g>
+        </g>
+      )}
     </svg>
   );
 }
