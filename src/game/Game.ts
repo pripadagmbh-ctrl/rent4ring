@@ -21,7 +21,7 @@ import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
 import { farewellLine, type MuellerLine } from '../data/muellerLines';
-import { DALE_APOLOGIES, tipFor, type DaleTip } from '../data/daleTips';
+import { DALE_APOLOGIES, DALE_WORRIED, tipFor, type DaleTip } from '../data/daleTips';
 import { departureRoute, departureSpeedAt, fleetParkingSpots, homeBaseFrame, toWorld, YARD_Y, type DepartureRoute } from './departure';
 import { FLEET } from '../data/fleet';
 
@@ -245,6 +245,8 @@ export class Game {
    * ends a ride is the man. Cars keep the old meaning.
    */
   private riderHurt = 0;
+  /** Seconds until Dale says the next worried thing about his partner. */
+  private daleWorryIn = 3;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
@@ -787,6 +789,22 @@ export class Game {
 
     if (this.phase === 'departure' || this.phase === 'approach' || this.phase === 'retired') return;
 
+    // When Herr Müller is the one riding, Dale stops instructing. You do not
+    // instruct a man on his own bike who has ridden here longer than you have
+    // known him — you watch your business partner do something dangerous and
+    // say so, and you say it more often the worse it is going.
+    if (this.car.bike) {
+      this.daleWorryIn -= dt;
+      if (this.daleWorryIn > 0 || this.daleHold > 0) return;
+      const tone =
+        this.riderHurt > 0.62 ? 'alarmed' : this.riderHurt > 0.28 ? 'nervous' : 'calm';
+      this.daleLine = { text: pick(DALE_WORRIED[tone]), kind: tone === 'calm' ? 'line' : 'warn', apologising: false };
+      this.daleHold = DALE_DWELL_SECONDS;
+      // He frets faster the more worried he is.
+      this.daleWorryIn = DALE_WORRY_GAP * (tone === 'alarmed' ? 0.45 : tone === 'nervous' ? 0.7 : 1);
+      return;
+    }
+
     const lookAheadM = Math.max(80, (this.vehicle.speed || 0) * DALE_LOOKAHEAD_SECONDS);
     const ahead = Math.round(lookAheadM / this.track.spacing);
     const coming = this.track.sectionNameAt(this.vehicle.trackIndex + ahead);
@@ -803,6 +821,11 @@ export class Game {
 
   /** He takes the blame with Herr Müller, which is not the same as with you. */
   private daleApologise(): void {
+    // Not on the bike. The apologies are Dale taking the blame with Herr
+    // Müller for the customer's mistakes — with Herr Müller himself riding
+    // there is no customer, and apologising to a man for his own riding is a
+    // different conversation entirely. He worries instead.
+    if (this.car.bike) return;
     if (this.daleApologyCooldown > 0) return;
     this.daleApologyCooldown = DALE_APOLOGY_GAP_SECONDS;
     this.daleLine = { text: pick(DALE_APOLOGIES), kind: 'warn', apologising: true };
@@ -1837,6 +1860,9 @@ const FLOW_LINES = [
  * from the yard and the straightest run on the whole route — 0.8 degrees of
  * direction change over fifteen points.
  */
+/** How often Dale frets while Herr Müller is riding, seconds. */
+const DALE_WORRY_GAP = 9;
+
 /** Closing speed into a barrier that puts him over the bars, m/s. */
 const SPILL_FROM_MS = 4.5;
 

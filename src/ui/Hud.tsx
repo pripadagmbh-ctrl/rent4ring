@@ -75,7 +75,7 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
             you could not read both without moving your eyes off the road. */}
         {hud.dale && (
           <div
-            className={`dale-call dale-call--${hud.dale.kind} ${hud.dale.apologising ? 'is-aside' : ''}`}
+            className={`dale-call dale-call--${hud.dale.kind} ${hud.dale.apologising ? 'is-aside' : ''} ${hud.damageIsRider ? 'is-watching' : ''}`}
             role="status"
             aria-live="polite"
           >
@@ -86,7 +86,11 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
             />
             <div className="dale-call__body">
               <span className="dale-call__who">
-                {hud.dale.apologising ? 'Dale → Herr Müller' : 'Dale'}
+                {hud.dale.apologising
+                  ? 'Dale → Herr Müller'
+                  : hud.damageIsRider
+                    ? 'Dale · watching'
+                    : 'Dale'}
               </span>
               <span key={hud.dale.text} className="dale-call__text">
                 {hud.dale.text}
