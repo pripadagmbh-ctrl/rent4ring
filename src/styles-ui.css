@@ -1501,6 +1501,10 @@
     --hud-col: min(420px, 52vw);
   }
   .mueller {
+    /* Restated, not inherited. The portrait rule above already set 118 px and
+       it appears earlier in the file, so leaving this out left the sideways
+       panel at portrait width — measured 118 where the grid below needs 420. */
+    width: var(--hud-col);
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:

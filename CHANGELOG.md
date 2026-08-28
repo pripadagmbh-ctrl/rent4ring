@@ -121,6 +121,11 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
 
 ### Behoben
 
+- **Die Sprechblasen sind nach unten links gewandert.** Sie standen oben links
+  quer über dem Horizont — der einzige Teil des Bildes, den man beim Fahren
+  wirklich liest. Auf Bildschirmen mit Platz stapelt sich die Spalte jetzt vom
+  unteren Rand nach oben, über der Minimap, die ihre Ecke behält. Auf dem Handy
+  bleibt alles oben, weil dort die untere Bildhälfte den Bedienflächen gehört.
 - **Dales Ansagen verdeckten die Bahn.** Sein Kasten hatte `width: 100%`, saß
   aber in einer absolut positionierten Schiene ohne Breitenangabe — die wuchs
   also mit dem Text mit. Gemessen: 742 px auf einem 1440er Bildschirm, mehr als

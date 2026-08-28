@@ -265,9 +265,18 @@ button {
    top of him — flexbox pushes instead of overlapping. */
 .hud__rail {
   position: absolute;
-  top: calc(18px + var(--safe-top));
+  /* Anchored to the *bottom* on a screen with room for it. Talking that sits
+     across the top left sits across the horizon, which is the one part of the
+     picture a driver is actually reading; down here it is over the road
+     immediately in front, which nobody is looking at. The phone query below
+     puts it back at the top, because there the bottom belongs to the pads. */
+  top: auto;
   left: calc(18px + var(--safe-left));
-  bottom: calc(18px + var(--safe-bottom));
+  /* Clear of the minimap, which keeps the corner: 18 + its 210 + 10 of air.
+     The column therefore fills the lower left rather than the corner itself,
+     which is still far away from the horizon the driver is reading. */
+  bottom: calc(238px + var(--safe-bottom));
+  max-height: calc(100% - 256px - var(--safe-top) - var(--safe-bottom));
   display: flex;
   flex-direction: column;
   /* Stacks from the top, never space-between. Spreading the rail over the
@@ -275,7 +284,10 @@ button {
      where .minimap already lives, so the two sat exactly on top of each
      other (190x210, a complete overlap) at every desktop size. Stacking
      downwards keeps him clear of it and matches the phone layout. */
-  justify-content: flex-start;
+  /* Stacked against the bottom, so the newest thing he says is nearest the
+     edge and the column grows upward into empty sky rather than downward
+     into the road. */
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 10px;
   pointer-events: none;
@@ -286,8 +298,15 @@ button {
      his longest line: measured at 742 px on a 1440 px screen, more than half
      the picture, laid across the middle of the track. Pinned to Herr Müller's
      208 px, the same text wraps into the column beside him instead of
-     reaching for the apex. */
-  width: var(--hud-col);
+     reaching for the apex.
+
+     `max-content` with a cap, not a fixed width: pinning it outright made the
+     rail 385 px in landscape while Herr Müller inside it was 118, because the
+     column value and his width are set by different media queries. Sized to
+     its content it is never wider than it needs, and the cap means a long line
+     of Dale's wraps instead of stretching it. */
+  width: max-content;
+  max-width: var(--hud-col);
 }
 
 .hud__topleft {
@@ -539,6 +558,10 @@ button {
 }
 
 /* ------------------------------------------------------------- minimap */
+/* Stays bottom left. Moving it to the bottom right to make room for the
+   speech looked obvious and was wrong: measured, it landed on the speed and
+   gear readout, the rev bar and the gauge all at once — the entire right-hand
+   instrument cluster lives down there. The speech goes *above* it instead. */
 .minimap {
   position: absolute;
   left: calc(18px + var(--safe-left));
