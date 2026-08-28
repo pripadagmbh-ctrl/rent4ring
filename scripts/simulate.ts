@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { RoadPath, Track } from '../src/game/track';
 import { Vehicle, maxSteerAngle } from '../src/game/physics';
 import { FLEET } from '../src/data/fleet';
+import { buildRacingLine } from './racingLine';
 
 const G = 9.81;
 
@@ -18,7 +19,10 @@ function driveLap(carIndex: number, assists: boolean) {
   const car = FLEET[carIndex];
   const vehicle = new Vehicle(car);
   vehicle.assists = assists;
-  vehicle.placeOnTrack(track, 0, 0);
+  // Onto the racing line, not the centreline: starting a metre off the line
+  // it is about to follow costs the first corner for no reason.
+  const line = buildRacingLine(track, car);
+  vehicle.placeOnTrack(track, 0, line.offset[0]);
 
   const n = track.count;
   const dt = 1 / 120;
@@ -32,6 +36,10 @@ function driveLap(carIndex: number, assists: boolean) {
   let maxLateral = 0;
   let vTarget = 0;
   let stuckFor = 0;
+  let steerSmooth = 0;
+
+  /** How quickly the follower's hands move, 1/s. */
+  const STEER_DAMPING = 12;
 
   const LIMIT = 60 * 30;
 
@@ -50,21 +58,13 @@ function driveLap(carIndex: number, assists: boolean) {
       break;
     }
 
-    // --- Pure-pursuit steering towards a point up the road -------------
+    // --- Follow the racing line ----------------------------------------
+    // Look further ahead the faster you are going, which is what makes a
+    // pure-pursuit follower stable: a fixed lookahead oscillates at speed and
+    // understeers wide at walking pace.
     const speed = Math.abs(vehicle.vLong);
-    const lookaheadM = 12 + speed * 0.9;
-    const lookahead = Math.max(2, Math.round(lookaheadM / track.spacing));
-    const target = track.at(idx + lookahead);
-
-    // Poor man's racing line: aim towards the inside of whatever is coming,
-    // averaged over the next stretch so the line does not twitch point to point.
-    let curvAvg = 0;
-    const lineScan = Math.round(90 / track.spacing);
-    for (let k = 0; k < lineScan; k++) curvAvg += track.at(idx + lookahead + k).curvature;
-    curvAvg /= lineScan;
-    const apexOffset =
-      THREE.MathUtils.clamp(curvAvg * 260, -1, 1) * Math.max(0, target.halfWidth - 1.6);
-    const aimPoint = target.pos.clone().addScaledVector(target.normal, apexOffset);
+    const lookahead = Math.max(2, Math.round((10 + speed * 0.85) / track.spacing));
+    const aimPoint = line.points[(idx + lookahead) % n];
 
     const toTarget = new THREE.Vector3().subVectors(aimPoint, vehicle.position);
     toTarget.y = 0;
@@ -74,54 +74,39 @@ function driveLap(carIndex: number, assists: boolean) {
     const angle = Math.atan2(toTarget.dot(left), toTarget.dot(fwd));
     const dist = Math.max(toTarget.length(), 1);
 
-    // Positive lateral means the car is left of the centreline.
     const lateral = track.lateralOffset(vehicle.position, idx);
     maxLateral = Math.max(maxLateral, Math.abs(lateral));
 
     // Steering angle that would arc the car onto the target point, left-positive.
     const desiredDelta = Math.atan2(2 * car.wheelbase * Math.sin(angle), dist);
     // The physics limits lock with speed; normalise against the same curve.
-    // Same law the car uses, imported rather than copied — a second copy
-    // here would go stale the moment the steering changes.
+    // Imported rather than copied — a second copy here would go stale the
+    // moment the steering law changes.
     const maxSteer = maxSteerAngle(speed, car.grip, car.wheelbase);
-    // DriveInput.steer is right-positive, so both terms flip sign here.
-    // Only fight back towards the road once the car is running out of asphalt,
-    // otherwise this would cancel out the racing line.
-    const edge = track.at(idx).halfWidth * 0.85;
-    const excess = Math.abs(lateral) > edge ? Math.sign(lateral) * (Math.abs(lateral) - edge) : 0;
-    const recentre = THREE.MathUtils.clamp(excess * 0.14, -0.4, 0.4);
-    const steer = THREE.MathUtils.clamp(-(desiredDelta / maxSteer) * 1.15 + recentre, -1, 1);
+    // DriveInput.steer is right-positive, so the term flips sign here. No
+    // recentring term any more: the line *is* the target, so pulling towards
+    // the centreline as well would only fight it. That fight is what put the
+    // old follower into the barriers.
+    const wanted = THREE.MathUtils.clamp(-(desiredDelta / maxSteer), -1, 1);
+    // First-order damping on the steering command. A pure-pursuit follower
+    // feeding the raw command into a car with real steering inertia rings —
+    // it corrects, overshoots, corrects harder — and on a short-wheelbase
+    // machine that ringing is what walks it into the barriers. A person's
+    // hands do this smoothing without thinking about it.
+    steerSmooth += (wanted - steerSmooth) * Math.min(1, dt * STEER_DAMPING);
+    const steer = steerSmooth;
 
-    // --- Corner speed, accounting for speed-dependent downforce --------
-    // Lateral capacity is mu*g*(1 + k*v^2), so v^2/R = mu*g*(1 + k*v^2)
-    // solves to v^2 = mu*g / (1/R - mu*g*k).
-    let vMax = car.topSpeedKmh / 3.6;
-    // Worst case is braking from top speed: v^2 / (2a) plus a margin. The old
-    // fixed 260 m was fine for the MINI and ~150 m short for the 296 GTB,
-    // which quietly corrupted exactly the lap times this tool exists to check.
-    const muScan = car.grip;
-    const horizonM = (vMax * vMax) / (2 * muScan * G * 0.9) + 60;
-    const scanPoints = Math.round(horizonM / track.spacing);
-    const mu = muScan;
-    for (let k = 2; k < scanPoints; k++) {
-      const p = track.at(idx + k);
-      const curv = Math.abs(p.curvature);
-      if (curv < 2e-4) continue;
-      const denom = curv - mu * G * car.downforce;
-      // A negative denominator means downforce alone can hold the corner flat.
-      const corner = denom <= 1e-6 ? car.topSpeedKmh / 3.6 : Math.sqrt((mu * G) / denom);
-      const distance = k * track.spacing;
-      const decel = mu * G * 0.9;
-      const entry = Math.sqrt(Math.max(0, corner * corner + 2 * decel * distance));
-      vMax = Math.min(vMax, entry);
-    }
-    vMax = Math.max(vMax * 0.94, 11);
-    // Rate-limit the target so a momentary lookahead jump cannot spike the throttle.
-    vTarget += THREE.MathUtils.clamp(vMax - vTarget, -14 * dt, 9 * dt);
+    // --- Speed from the profile ----------------------------------------
+    // The profile already accounts for what is coming: it was built with a
+    // backward pass from every corner, so the number at this index is one the
+    // car can still act on. Nothing has to be scanned per frame.
+    const vMax = line.speed[idx];
+    // Rate-limit so a lookahead jump at a hairpin cannot spike the throttle.
+    vTarget += THREE.MathUtils.clamp(vMax - vTarget, -18 * dt, 10 * dt);
 
     const error = vTarget - speed;
-    let throttle = THREE.MathUtils.clamp(error * 0.4, 0, 1);
-    const brake = THREE.MathUtils.clamp(-error * 0.3, 0, 1);
+    let throttle = THREE.MathUtils.clamp(error * 0.5, 0, 1);
+    const brake = THREE.MathUtils.clamp(-error * 0.45, 0, 1);
     // Lift off only when genuinely sideways — a few degrees of body slip is
     // normal in a fast corner and must not cut the throttle.
     const slip = Math.abs(Math.atan2(vehicle.vLat, Math.max(speed, 1)));
@@ -139,8 +124,9 @@ function driveLap(carIndex: number, assists: boolean) {
     if (telemetry.speedKmh < 12) {
       stuckFor += dt;
       if (stuckFor > 3) {
-        vehicle.placeOnTrack(track, vehicle.trackIndex, 0);
+        vehicle.placeOnTrack(track, vehicle.trackIndex, line.offset[vehicle.trackIndex]);
         vTarget = 0;
+        steerSmooth = 0;
         stuckFor = 0;
       }
     } else {
@@ -275,10 +261,15 @@ console.log('=== Auto-driver lap times ===');
 for (let i = 0; i < FLEET.length; i++) {
   const r = driveLap(i, true);
   const status = r.completed ? 'OK ' : 'DNF';
-  const vsTarget = r.completed ? (r.time - r.target >= 0 ? '+' : '') + (r.time - r.target).toFixed(1) + 's' : '—';
+  // The margin, not the raw delta, is what the target is actually for: this
+  // is a clean reference lap driven by something that never makes a mistake,
+  // so the target has to sit some way above it for a person on a keyboard.
+  // Comparing margins across the fleet is how you see whether the targets are
+  // consistent with each other, which the seconds alone never showed.
+  const margin = r.completed ? `${(((r.target - r.time) / r.target) * 100).toFixed(1)}%` : '—';
   console.log(
-    `${status} ${r.car.padEnd(26)} ${fmt(r.time).padStart(9)}  Ziel ${fmt(r.target).padStart(9)}  Δ${vsTarget.padStart(8)}  ` +
-      `vmax ${r.topSpeed.toFixed(0).padStart(3)} km/h  Kontakte ${String(r.contacts).padStart(3)}  ` +
-      `off ${r.offTrackPct.toFixed(1)}%  latMax ${r.maxLateral.toFixed(1)}m`,
+    `${status} ${r.car.padEnd(26)} ${fmt(r.time).padStart(9)}  Ziel ${fmt(r.target).padStart(9)}  ` +
+      `Luft ${margin.padStart(6)}  vmax ${r.topSpeed.toFixed(0).padStart(3)} km/h  ` +
+      `Kontakte ${String(r.contacts).padStart(3)}  off ${r.offTrackPct.toFixed(1)}%`,
   );
 }

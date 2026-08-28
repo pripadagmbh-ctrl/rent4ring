@@ -86,29 +86,48 @@ Ausfahrt auf Teer (Hofflächen oder Burgstraße), die Kehre eingeschlossen.
 
 ---
 
-## O5 — Zielrundenzeiten lassen sich nicht seriös nachziehen, solange der Auto-Fahrer nicht sauber fährt
+## O5 — Zielrundenzeiten (Werkzeug behoben, Ducati offen)
 
-Nach dem Lenkungs-Fix schlägt der Auto-Fahrer aus `simulate.ts` die
-Zielrundenzeiten um 39 bis 100 Sekunden — was zunächst wie zu leicht gesetzte
-Ziele aussieht. Der Wert taugt aber nicht als Maßstab: derselbe Lauf meldet
-**20 bis 53 Prozent Zeit abseits der Strecke** und **111 bis 348
-Leitplankenkontakte** pro Runde, `latMax` liegt bei allen acht Fahrzeugen exakt
-auf 12,5 m — das ist die Barriere (`halfWidth + 6,5`). Der Follower fährt also
-keine Runde, er prallt eine Runde lang die Leitplanken entlang und schneidet
-dabei ab. Seine Zeiten sind zu schnell, weil er schummelt, nicht weil die Ziele
-zu weich sind.
+**Behoben:** Der Auto-Fahrer in `simulate.ts` fuhr keine Runde, er prallte eine
+Runde lang die Leitplanken entlang — 20 bis 53 Prozent neben der Strecke, 111
+bis 348 Kontakte. Seine Zeiten waren zu schnell, weil er abkürzte, nicht weil
+die Ziele zu weich waren.
 
-**Versucht und verworfen:** Recentre-Verstärkung von 0,14 auf 0,5, Eingriff ab
-55 statt 85 Prozent der halben Fahrbahnbreite, Apex-Offset zurückgenommen,
-Kurventempo-Sicherheitsfaktor von 0,94 auf 0,86. Ergebnis war deutlich
-schlechter — der P-Anteil kämpft gegen die Ideallinie, die Kontakte stiegen bei
-den schnellen Autos (GT3 RS 159 → 304), und die Ducati kam gar nicht mehr
-durch (DNF). Rückgängig gemacht.
+Er hat jetzt eine vorab berechnete Ideallinie (`scripts/racingLine.ts`):
+Minimum-Krümmung durch Relaxation über die Fahrbahnbreite, dann ein
+Geschwindigkeitsprofil aus der Krümmung *dieser Linie* mit Rückwärts- und
+Vorwärtsdurchlauf. Der Follower folgt der Linie, statt sie pro Frame zu
+erfinden; der Rückstell-Term gegen die Mittellinie ist weg, weil er gegen die
+Linie kämpfte.
 
-**Was es wirklich bräuchte:** eine vorab berechnete Ideallinie mit daraus
-abgeleitetem Geschwindigkeitsprofil statt eines Apex-Offsets pro Frame. Das ist
-ein eigenes Stück Arbeit am Werkzeug, kein Tuning-Wert.
+| Fahrzeug | Kontakte vorher → nachher | off vorher → nachher |
+|---|---|---|
+| MINI Cooper S | 111 → **0** | 20,3 % → **0,7 %** |
+| GR Yaris | 140 → **0** | 27,7 % → **1,8 %** |
+| GR Supra | 126 → **0** | 24,5 % → **1,7 %** |
+| Taycan Turbo GT | 300 → 34 | 41,5 % → 7,1 % |
+| 718 Spyder RS | 206 → 5 | 34,4 % → 7,7 % |
+| 911 GT3 RS | 159 → 15 | 30,5 % → 10,6 % |
+| Ferrari 296 GTB | 166 → 8 | 37,5 % → 10,5 % |
 
-**Relevanz:** Blockiert jede belastbare Aussage über den Schwierigkeitsgrad.
-Die Zielzeiten stehen bewusst unverändert — sie auf Basis dieser Messung
-nachzuziehen wäre geraten, nicht gemessen.
+Ein Rechenfehler war dabei der Kern: die Menger-Krümmung ist `4A/(abc)`, das
+Kreuzprodukt liefert aber `2A`. Mit dem falschen Faktor war jede Krümmung
+halbiert, jeder Radius verdoppelt und das Profil 41 Prozent zu schnell — die
+langsamste Stelle der ganzen Nordschleife kam mit 75 km/h heraus, und
+Wehrseifen ist eine 40er-Kurve. Korrigiert liegen die langsamsten Punkte bei
+53–54 km/h und heissen T13, Sabine-Schmitz-Kurve und Wehrseifen.
+
+**Was das ueber die Zielzeiten sagt:** Die frühere Behauptung „40 bis 100
+Sekunden zu leicht" stammte vom kaputten Follower und war falsch. Gegen eine
+saubere Referenzrunde bleibt jetzt eine Luft von 15,8 bis 22,1 Prozent — für
+einen Menschen an der Tastatur gegen etwas, das keine Fehler macht, ist das
+plausibel. Die Spanne von 6,3 Punkten ist die einzige Unwucht: der MINI ist
+mit 15,8 Prozent am schwersten, der Ferrari mit 22,1 am leichtesten. Ob das
+angeglichen wird, ist eine Design-Entscheidung und keine Messfrage.
+
+**Weiter offen: die Ducati.** 352 Kontakte, 45,7 Prozent neben der Strecke.
+Der Follower fährt kein Motorrad. Eine Dämpfung des Lenkbefehls hat ihr wenig
+geholfen (445 → 352) und den Autos gemischt geschadet (Taycan 14 → 34
+Kontakte), war aber netto beim Abkommen ein Gewinn und ist deshalb drin. Was
+fehlt, ist vermutlich ein eigenes Kurvenmodell für ein einspuriges Fahrzeug —
+Schräglage statt Lenkwinkel.
