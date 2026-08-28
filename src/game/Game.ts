@@ -19,6 +19,7 @@ import { buildSkidMarks, type SkidMarks } from './skidmarks';
 import { startSpill, type Spill } from './spill';
 import { buildAmbulance } from './ambulance';
 import { buildPoliceCar, type PoliceCar } from './police';
+import { buildEscort, type Escort } from './escort';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -66,6 +67,15 @@ export interface SpeedTicket {
   fineEuro: number;
   points: number;
   banMonths: number;
+  /**
+   * Which vehicle was caught, for the notice. The camera photographs whoever
+   * was riding, and when that is Herr Müller on his own Panigale the whole
+   * document reads differently — it is his name on the registration *and* his
+   * face in the picture.
+   */
+  vehicle: string;
+  /** True when Herr Müller himself was the one caught. */
+  self: boolean;
 }
 
 /** Handed to the UI when the damage bar fills and the drive is over. */
@@ -256,6 +266,8 @@ export class Game {
   /** Seconds until Dale says the next worried thing about his partner. */
   private daleWorryIn = 3;
   /** The patrol car, once the camera has given it a reason to exist. */
+  /** Tanju, riding sweep. Only exists while Herr Müller is on the Panigale. */
+  private escort: Escort | null = null;
   private police: PoliceCar | null = null;
   /** How far back down the approach it is, in metres. */
   private policeBehind = 0;
@@ -482,6 +494,13 @@ export class Game {
     this.scene.add(marks.mesh);
     this.skidMarks = marks;
 
+    // Nobody lets a man of fifty-eight go out on a superbike on his own.
+    if (car.bike) {
+      const tanju = buildEscort();
+      this.scene.add(tanju.group);
+      this.escort = tanju;
+    }
+
     const yard = homeBaseFrame(this.approach);
     const crowd = buildCrowd();
     crowd.group.position.copy(toWorld(yard, 0, YARD_Y, 0));
@@ -599,6 +618,7 @@ export class Game {
     this.crowd = null;
     this.speedCamera?.dispose();
     this.police?.dispose();
+    this.escort?.dispose();
     this.skidMarks?.dispose();
     this.speedCamera = null;
     this.composer.dispose();
@@ -828,7 +848,13 @@ export class Game {
     const { fine, points, banMonths } = penaltyFor(over);
     this.fines += fine;
     this.speedCamera.trigger();
-    this.setMood('angry', pick(TICKET_LINES), 6);
+    // Caught on his own motorcycle, the whole speech changes: there is nobody
+    // to bill, nobody to be furious with, and the points are his.
+    this.setMood(
+      this.car.bike === true ? 'scared' : 'angry',
+      pick(this.car.bike === true ? TICKET_SELF_LINES : TICKET_LINES),
+      6,
+    );
     this.sendPolice();
     this.callbacks.onTicket({
       limitKmh: VILLAGE_LIMIT_KMH,
@@ -838,6 +864,8 @@ export class Game {
       fineEuro: fine,
       points,
       banMonths,
+      vehicle: `${this.car.brand} ${this.car.model}`,
+      self: this.car.bike === true,
     });
   }
 
@@ -1471,6 +1499,7 @@ export class Game {
 
     this.carMesh.setDamage(this.damage);
     this.layRubber();
+    this.updateEscort(dt);
 
     if (this.ghostMesh && this.ghostBest && this.phase === 'timing') {
       const sample = this.ghostSampleAt(this.lapTime);
@@ -1688,6 +1717,31 @@ export class Game {
     }
     this.input.captureEnabled = true;
     this.setMood('idle', pick(REMOUNT_LINES), 4);
+  }
+
+  /**
+   * Keeps Tanju where a friend riding sweep would be. He needs helping when
+   * Herr Müller is off the bike or has stopped — those are the two moments a
+   * second rider exists for, and both are already known here.
+   */
+  private updateEscort(dt: number): void {
+    const escort = this.escort;
+    if (!escort) return;
+    // He waits in the yard until the ride actually starts; the departure
+    // choreography has no room for a second machine on that ramp.
+    escort.group.visible = this.phase !== 'departure';
+    if (!escort.group.visible) return;
+
+    // A *fractional* index, not `trackIndex`. That one is a whole number and
+    // the bike is somewhere between two of them, so hanging Tanju off it left
+    // him a constant 15 m further back than asked for — measured: 37,7 m for
+    // a requested 22, and he settled 2,7 m behind when told to stop 9 ahead.
+    const p = this.road.at(this.vehicle.trackIndex);
+    const past = this.vehicle.position.clone().sub(p.pos).dot(p.tangent);
+    const lead = this.vehicle.trackIndex + past / this.road.spacing;
+
+    const stopped = (this.telemetry?.speedKmh ?? 0) < 6;
+    escort.update(dt, this.road, lead, this.vehicle.speed, this.spill !== null || stopped);
   }
 
   // ----------------------------------------------------------------- misc
@@ -1952,6 +2006,14 @@ const AMBULANCE_LINES = [
   'The bike. Is the bike all right. Ask about the bike.',
   'Fifty-eight years old on a superbike. What did I think was going to happen.',
   'Should have stayed behind the counter pulling Amex cards through the reader.',
+];
+
+/** Caught on his own bike. His licence, his points, his own stupid fault. */
+const TICKET_SELF_LINES = [
+  'That was me. That was me on my own licence. Marvellous.',
+  'Points. On mine. In my own village, past my own shop.',
+  'Do not look at me like that. I know exactly what I did.',
+  'Forty years without a single one and I do this on a Tuesday.',
 ];
 
 /** Where the patrol car appears behind you, and how close it ever gets. */

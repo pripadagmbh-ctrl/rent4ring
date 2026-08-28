@@ -83,6 +83,15 @@ Detailliertes Hintergrundwissen zu den einzelnen Sitzungen steht in
   schwarzen Flagge, sondern in Adenau — Herr Müller mit Bein und Arm in Gips,
   Schulterstütze und Pflastern: „Should have stayed behind the counter pulling
   Amex cards through the reader."
+- **Tanju fährt mit**, sobald Herr Müller selbst auf der Panigale sitzt. Er
+  hängt 23 m hinterher und kommt vorbei, sobald etwas passiert — bei einem
+  Sturz oder Stillstand steht er sechs Meter vor ihm und seitlich versetzt.
+  Niemand fährt Schluss, weil er die Aussicht genießen will.
+- **Der Bußgeldbescheid enthält jetzt das Messfoto** — überstrahlt vom Blitz,
+  Kennzeichen lesbar, Fahrer gerade so. Und er weiß, wer gefahren ist: erwischt
+  es Herrn Müller auf seiner eigenen Maschine, ändert sich der ganze Text. Es
+  gibt niemanden, dem man das schicken könnte, die Punkte sind seine, und im
+  Foto ist sein eigenes Gesicht.
 - **Polizei nach dem Blitzer.** Wer geblitzt wird, bekommt Blaulicht in den
   Rückspiegel. Die Streife gibt am Streckentor auf — die StVO endet an der
   Schranke, und Herr Müller sagt genau das.

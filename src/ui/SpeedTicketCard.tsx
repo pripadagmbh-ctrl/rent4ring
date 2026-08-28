@@ -1,5 +1,6 @@
 import type { SpeedTicket } from '../game/Game';
 import Gorilla from './Gorilla';
+import Customer from './Customer';
 
 interface Props {
   ticket: SpeedTicket;
@@ -23,12 +24,40 @@ export default function SpeedTicketCard({ ticket, onClose }: Props) {
       <div className="ticket">
         <div className="ticket__head">
           <span className="ticket__authority">Kreis Ahrweiler · Bußgeldstelle</span>
-          <span className="ticket__kind">Anhörung im Ordnungswidrigkeitenverfahren</span>
+          <span className="ticket__kind">
+            {ticket.self ? 'Anhörung · Betroffener: der Halter' : 'Anhörung im Ordnungswidrigkeitenverfahren'}
+          </span>
         </div>
 
-        <div className="ticket__flash" aria-hidden="true">
-          <span className="ticket__frame" />
-        </div>
+        {/* The photograph. A German notice always encloses one, and it is
+            always the same picture: washed out by the flash, the plate
+            readable and the driver just about. Drawn rather than rendered —
+            the game's camera is behind the car, and the one view a speed
+            camera never has is the one from behind. */}
+        <figure className="ticket__photo">
+          <div className="ticket__photo-frame">
+            <div className="ticket__photo-scene">
+              <span className="ticket__photo-road" />
+              <span className="ticket__photo-car">
+                {/* The camera photographs whoever was actually riding. */}
+                {ticket.self ? (
+                  <Gorilla mood="scared" className="ticket__photo-face" />
+                ) : (
+                  <Customer className="ticket__photo-face" />
+                )}
+                <span className="ticket__photo-plate">NÜR · MR 1</span>
+              </span>
+              <span className="ticket__photo-glare" />
+            </div>
+            <div className="ticket__photo-stamp">
+              <span>{ticket.measuredKmh} km/h</span>
+              <span>zul. {ticket.limitKmh}</span>
+            </div>
+          </div>
+          <figcaption>
+            Messfoto · Burgstraße, Nürburg · {ticket.vehicle}
+          </figcaption>
+        </figure>
 
         <div className="ticket__rows">
           <div>
@@ -65,18 +94,22 @@ export default function SpeedTicketCard({ ticket, onClose }: Props) {
         </div>
 
         <div className="ticket__mueller">
-          <Gorilla mood="angry" gesture="point" className="ticket__fig" />
+          <Gorilla
+            mood={ticket.self ? 'scared' : 'angry'}
+            gesture={ticket.self ? 'none' : 'point'}
+            className="ticket__fig"
+          />
           <div className="ticket__speech">
             <strong>Herr Müller</strong>
-            The car is registered to me, so this comes to my door with my name on
-            it — and it goes on the Amex with everything else. Fifty means fifty.
-            The circuit is the bit where you may use all of it.
+            {ticket.self
+              ? `That is my bike, my licence and my face in the photograph. There is nobody to send this to. Forty years I have handed these to other people and read them the speech, and now I get to read it to myself. Fifty means fifty. The circuit is the bit where you may use all of it.`
+              : `The car is registered to me, so this comes to my door with my name on it — and it goes on the Amex with everything else. Fifty means fifty. The circuit is the bit where you may use all of it.`}
           </div>
         </div>
 
         <div className="dialog__actions">
           <button className="btn-primary" onClick={onClose}>
-            Understood · carry on
+            {ticket.self ? 'Say nothing · carry on' : 'Understood · carry on'}
           </button>
         </div>
       </div>
