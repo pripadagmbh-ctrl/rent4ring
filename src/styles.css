@@ -18,6 +18,12 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  /**
+   * Width of the left HUD column. Herr Müller and Dale both live in it, and
+   * both have to be the same width or the rail grows to whichever is wider —
+   * see the note on .hud__rail. One value, overridden per layout below.
+   */
+  --hud-col: 208px;
 }
 
 * {
@@ -273,6 +279,15 @@ button {
   align-items: flex-start;
   gap: 10px;
   pointer-events: none;
+  /* A fixed column, and this is load-bearing.
+     The rail is absolutely positioned with no `right`, so its width was
+     shrink-to-fit — it grew with whatever was inside it. `.dale-call` asks
+     for `width: 100%` of exactly that, which resolves to the natural width of
+     his longest line: measured at 742 px on a 1440 px screen, more than half
+     the picture, laid across the middle of the track. Pinned to Herr Müller's
+     208 px, the same text wraps into the column beside him instead of
+     reaching for the apex. */
+  width: var(--hud-col);
 }
 
 .hud__topleft {
