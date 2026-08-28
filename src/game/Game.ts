@@ -18,6 +18,7 @@ import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
 import { buildSkidMarks, type SkidMarks } from './skidmarks';
 import { startSpill, type Spill } from './spill';
 import { buildAmbulance } from './ambulance';
+import { buildPoliceCar, type PoliceCar } from './police';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -254,9 +255,67 @@ export class Game {
   private riderHurt = 0;
   /** Seconds until Dale says the next worried thing about his partner. */
   private daleWorryIn = 3;
+  /** The patrol car, once the camera has given it a reason to exist. */
+  private police: PoliceCar | null = null;
+  /** How far back down the approach it is, in metres. */
+  private policeBehind = 0;
+  private policeFor = 0;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
+
+  /**
+   * A patrol car pulls out behind you. It is not a chase you can lose by
+   * driving well — it gives up at the circuit gate, because the Nordschleife
+   * is private ground and the StVO stops at the barrier. That is the whole
+   * joke, and Herr Müller is the one who says it out loud.
+   */
+  private sendPolice(): void {
+    if (this.police) return;
+    const car = buildPoliceCar();
+    this.police = car;
+    this.policeBehind = POLICE_START_BEHIND_M;
+    this.policeFor = 0;
+    this.scene.add(car.group);
+    this.setMood('scared', pick(POLICE_LINES), 6);
+  }
+
+  /**
+   * Keeps the patrol car on the approach centreline a set distance back, and
+   * closes that distance steadily. Placed along the road rather than driven by
+   * physics: it has to follow the same curve you are on and arrive at the gate
+   * when you do, and a second driving model would only find new ways to end up
+   * in a hedge.
+   */
+  private updatePolice(dt: number): void {
+    const car = this.police;
+    if (!car) return;
+    this.policeFor += dt;
+    car.update(this.policeFor);
+
+    // Closes in, but never quite arrives — it is pressure, not a collision.
+    this.policeBehind = Math.max(POLICE_CLOSEST_M, this.policeBehind - POLICE_CLOSING_MS * dt);
+
+    const spacing = this.approach.spacing;
+    const back = Math.max(0, this.vehicle.trackIndex - this.policeBehind / spacing);
+    const p = this.approach.at(back);
+    car.group.position.copy(p.pos).addScaledVector(p.normal, -1.2);
+    car.group.rotation.y = Math.atan2(p.tangent.x, p.tangent.z);
+    for (const w of car.wheels) w.rotation.x -= (this.vehicle.speed / 0.33) * dt;
+
+    // Off the public road, off the hook.
+    if (this.phase !== 'approach') {
+      // This one is allowed to interrupt. `setMood` refuses a lesser mood
+      // mid-hold, and relief ranks below panic — but the panic was *about*
+      // this, and reaching the gate quickly would otherwise swallow the payoff
+      // entirely. The situation has changed, so the hold no longer applies.
+      this.moodHold = 0;
+      this.setMood('happy', pick(POLICE_GONE_LINES), 5);
+      this.scene.remove(car.group);
+      car.dispose();
+      this.police = null;
+    }
+  }
 
   // ---------------------------------------------------------------- Dale
   /** What he is saying, and for how much longer. */
@@ -539,6 +598,7 @@ export class Game {
     this.crowd?.dispose();
     this.crowd = null;
     this.speedCamera?.dispose();
+    this.police?.dispose();
     this.skidMarks?.dispose();
     this.speedCamera = null;
     this.composer.dispose();
@@ -661,6 +721,7 @@ export class Game {
 
     if (this.phase === 'approach') {
       this.checkSpeedCamera();
+      this.updatePolice(dt);
       this.updateApproach();
     } else {
       if (this.phase === 'timing') this.lapTime += dt;
@@ -768,6 +829,7 @@ export class Game {
     this.fines += fine;
     this.speedCamera.trigger();
     this.setMood('angry', pick(TICKET_LINES), 6);
+    this.sendPolice();
     this.callbacks.onTicket({
       limitKmh: VILLAGE_LIMIT_KMH,
       measuredKmh: Math.round(measured),
@@ -1890,6 +1952,26 @@ const AMBULANCE_LINES = [
   'The bike. Is the bike all right. Ask about the bike.',
   'Fifty-eight years old on a superbike. What did I think was going to happen.',
   'Should have stayed behind the counter pulling Amex cards through the reader.',
+];
+
+/** Where the patrol car appears behind you, and how close it ever gets. */
+const POLICE_START_BEHIND_M = 90;
+const POLICE_CLOSEST_M = 18;
+/** How fast it eats into that gap, m/s. */
+const POLICE_CLOSING_MS = 7;
+
+/** Herr Müller, watching a patrol car fill the mirror. */
+const POLICE_LINES = [
+  'Blue lights. Go — go, before the constables want money as well.',
+  'That is a patrol car and I am not stopping for it. Neither are you.',
+  'Right. The gate. Get to the gate — they cannot follow us in there.',
+  'Do not stop. Whatever you do, do not stop. They take cash and dignity.',
+];
+/** And once the gate has swallowed you. */
+const POLICE_GONE_LINES = [
+  'And there they stop. Private ground, gentlemen. Wonderful.',
+  'The StVO ends at that barrier. So does their afternoon.',
+  'Look at them turning round. That is the best thing I will see today.',
 ];
 
 /** How often Dale frets while Herr Müller is riding, seconds. */
