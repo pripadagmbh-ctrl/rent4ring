@@ -22,6 +22,8 @@ export interface BikeMesh {
   wheels: THREE.Object3D[];
   frontWheels: THREE.Object3D[];
   brakeLights: THREE.Mesh;
+  /** Herr Müller himself, so the game can throw him off and put him back. */
+  rider?: THREE.Object3D;
   setDamage(amount: number): void;
   dispose(): void;
 }
@@ -369,7 +371,11 @@ export function buildDucatiPanigale(options: Options = {}): BikeMesh {
   chassis.add(rear.pivot);
 
   // ------------------------------------------------------------- the rider
-  if (options.rider) chassis.add(buildRider(keep));
+  let rider: THREE.Group | undefined;
+  if (options.rider) {
+    rider = buildRider(keep);
+    chassis.add(rider);
+  }
 
   // ------------------------------------------------------------ assembly
   const group = new THREE.Group();
@@ -406,6 +412,7 @@ export function buildDucatiPanigale(options: Options = {}): BikeMesh {
     wheels: [front.spin, rear.spin],
     frontWheels: [steerHead],
     brakeLights: tailLight,
+    rider,
     setDamage(amount: number) {
       const a = THREE.MathUtils.clamp(amount, 0, 1);
       // Paint dulls and greys off, same idea as the cars.

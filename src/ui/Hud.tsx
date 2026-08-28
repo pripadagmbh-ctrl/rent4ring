@@ -66,6 +66,7 @@ export default function Hud({ hud, onPause, onSkipApproach }: Props) {
           mood={hud.muellerMood}
           line={hud.muellerLine}
           damageCost={hud.damageCost}
+          damageIsRider={hud.damageIsRider}
           damage={hud.damage}
         />
 

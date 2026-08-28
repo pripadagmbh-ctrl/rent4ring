@@ -3283,3 +3283,9 @@
     align-items: flex-start;
   }
 }
+
+/* The bar means a person now, not a repair bill — so it warms from green
+   through to the red of an ambulance rather than staying the billing colour. */
+.mueller__damage-fill.is-rider {
+  background: linear-gradient(90deg, var(--green), var(--gold) 55%, var(--red));
+}

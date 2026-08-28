@@ -16,6 +16,7 @@ import { buildTowTruck, type TowTruck } from './towTruck';
 import { buildCrowd, type Crowd } from './crowd';
 import { buildSpeedCamera, type SpeedCamera } from './speedCamera';
 import { buildSkidMarks, type SkidMarks } from './skidmarks';
+import { startSpill, type Spill } from './spill';
 import { InputManager, type CameraMode } from './input';
 import { EngineAudio } from './audio';
 import type { Mood } from '../ui/Gorilla';
@@ -97,7 +98,14 @@ export interface HudState {
   ghostPos: { x: number; z: number } | null;
   /** Metres still to drive before reaching the circuit. */
   approachRemaining: number;
+  /**
+   * 0-1. In a car this is bodywork; on the bike it is Herr Müller, because he
+   * owns the Panigale and a bill he sends himself decides nothing. What ends
+   * a ride on it is the man, so that is what the bar has to show.
+   */
   damage: number;
+  /** True while the bar is measuring the rider rather than the vehicle. */
+  damageIsRider: boolean;
   damageCost: number;
   muellerMood: Mood;
   muellerLine: string;
@@ -229,6 +237,14 @@ export class Game {
   /** Seconds of wheelie left, and the eased nose-up angle in radians. */
   private wheelieFor = 0;
   private wheelieAngle = 0;
+  /** Herr Müller off the bike and picking himself up, or null. */
+  private spill: Spill | null = null;
+  /**
+   * On the bike the damage bar is *him*, not the machine. He owns the Panigale,
+   * so a repair bill is money out of one pocket into the other; what actually
+   * ends a ride is the man. Cars keep the old meaning.
+   */
+  private riderHurt = 0;
   private ticketed = false;
   /** Running total of fines, kept apart from the repair bill. */
   private fines = 0;
@@ -587,6 +603,12 @@ export class Game {
   private simulate(dt: number): void {
     let input = this.input.update(dt);
 
+    if (this.spill) {
+      this.updateSpill(dt);
+      this.updateMood(dt);
+      return;
+    }
+
     if (this.phase === 'departure') {
       this.updateDeparture(dt);
       this.updateMood(dt);
@@ -673,6 +695,14 @@ export class Game {
     this.damageCost += cost;
     this.damage = Math.min(1, this.damage + v / 110);
     this.vehicle.condition = 1 - this.damage;
+
+    // On the bike a hit hurts the rider rather than the balance sheet, and a
+    // solid one puts him over the bars.
+    if (this.car.bike && v >= SPILL_FROM_MS) {
+      this.riderHurt = Math.min(1, this.riderHurt + v / 26);
+      this.throwRider(v);
+      return;
+    }
 
     if (this.damage >= 1) {
       this.retire();
@@ -1494,6 +1524,67 @@ export class Game {
     if (Math.abs(this.wheelieAngle) < 1e-4) this.wheelieAngle = 0;
   }
 
+  /**
+   * Over the bars. The bike goes down and slides; he goes his own way and
+   * lands somewhere else, which is the whole reason the rider is a separate
+   * object rather than part of the bodywork.
+   */
+  private throwRider(closingSpeed: number): void {
+    const rider = this.carMesh.rider;
+    if (!rider || this.spill) return;
+
+    this.input.captureEnabled = false;
+    this.cameraMode = 'chase';
+    this.wheelieFor = 0;
+    this.audio.impact(Math.min(1, closingSpeed / 18));
+    this.audio.scrape(0);
+
+    // Up and forward, along the way he was already going. A harder hit throws
+    // him further, but not without limit — past about this he is a cartoon.
+    //
+    // The vertical is sized against the flight beat rather than picked: at
+    // gravity 15 a launch of v rises v²/30 and is back down after 2v/15, so
+    // 8.4 m/s gives 2.3 m of air over 1.12 s, which fills the 1.1 s stage
+    // almost exactly. The first attempt used 3.4 and produced a 94 cm hop —
+    // a stumble, not a flight.
+    const speed = Math.min(closingSpeed, 16);
+    const fwd = this.vehicle.forward;
+    const launch = new THREE.Vector3(fwd.x * speed * 0.7, 4.6 + speed * 0.42, fwd.z * speed * 0.7);
+    this.spill = startSpill(rider, this.scene, this.vehicle.position.clone(), launch);
+
+    const bad = this.riderHurt > 0.66;
+    this.setMood('scared', pick(bad ? SPILL_BAD_LINES : SPILL_LINES), 4);
+  }
+
+  /**
+   * Runs the fall. The bike is riderless for the duration and simply slides to
+   * a stop: nothing about the machine is being driven, so nothing about it is
+   * simulated beyond friction.
+   */
+  private updateSpill(dt: number): void {
+    const spill = this.spill;
+    if (!spill) return;
+
+    const v = this.vehicle;
+    v.vLong *= Math.max(0, 1 - dt * 2.2);
+    v.vLat *= Math.max(0, 1 - dt * 3.4);
+    v.yawRate *= Math.max(0, 1 - dt * 3.4);
+    v.position.addScaledVector(v.forward, v.vLong * dt);
+    this.wheelieAngle *= Math.max(0, 1 - dt * 6);
+
+    if (spill.update(dt, v.position)) return;
+
+    spill.finish();
+    this.spill = null;
+    // Hurt enough and he does not get to carry on.
+    if (this.riderHurt >= 1) {
+      this.retire();
+      return;
+    }
+    this.input.captureEnabled = true;
+    this.setMood('idle', pick(REMOUNT_LINES), 4);
+  }
+
   // ----------------------------------------------------------------- misc
   recover(): void {
     // The car is driving itself out of the yard; there is nothing to recover
@@ -1549,6 +1640,7 @@ export class Game {
       sectionName: onRoad ? 'Approach · Burgstrasse' : this.track.sectionNameAt(idx),
       distance: onRoad ? 0 : this.track.distanceAt(idx),
       lapLength: this.track.lapLength,
+      damageIsRider: this.car.bike === true,
       offTrack: t?.offTrack ?? false,
       gripUsage: t?.gripUsage ?? 0,
       lateralG: t?.lateralG ?? 0,
@@ -1560,7 +1652,7 @@ export class Game {
       carPos: { x: this.vehicle.position.x, z: this.vehicle.position.z },
       ghostPos: ghost ? { x: ghost.x, z: ghost.z } : null,
       approachRemaining: this.approachRemaining(),
-      damage: this.damage,
+      damage: this.car.bike ? this.riderHurt : this.damage,
       damageCost: Math.round(this.damageCost),
       muellerMood: this.mood,
       muellerLine: this.moodLine,
@@ -1745,6 +1837,9 @@ const FLOW_LINES = [
  * from the yard and the straightest run on the whole route — 0.8 degrees of
  * direction change over fifteen points.
  */
+/** Closing speed into a barrier that puts him over the bars, m/s. */
+const SPILL_FROM_MS = 4.5;
+
 /** The speed band in which the front wheel will actually come up. */
 const WHEELIE_MIN_KMH = 25;
 const WHEELIE_MAX_KMH = 140;
@@ -1837,6 +1932,27 @@ function recordBan(): number {
  * entirely deserved.
  */
 /** What he says with the front wheel in the air. He is delighted and appalled. */
+/** Coming off, and not badly hurt yet. */
+const SPILL_LINES = [
+  'Ohhh. That is the gravel. That is definitely the gravel.',
+  'I am fine. Nothing is broken that was not already.',
+  'Do not tell Dale. Dale worries.',
+  'The bike is fine. I am the crumple zone.',
+];
+/** Coming off when he is already in a bad way. */
+const SPILL_BAD_LINES = [
+  'That one hurt in a new place.',
+  'Right. Right. Give me a moment.',
+  'I am getting too old to land like that.',
+];
+/** Back on the bike, dusting himself down. */
+const REMOUNT_LINES = [
+  'Nothing to see. Back on. The leathers took most of it.',
+  'That was a controlled dismount. I meant most of that.',
+  'Up we get. This is why the suit costs what it costs.',
+  'If anyone asks, the bike slid out on its own.',
+];
+
 const WHEELIE_LINES = [
   'Front wheel up! Do not tell the insurer. Do not tell Dale either.',
   'This is a demonstration of throttle control. That is what it says on the invoice.',
