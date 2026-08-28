@@ -170,7 +170,12 @@ export function buildCrowd(): Crowd {
  * headlights, hard panniers and a top box. Same local frame as everything
  * else — +z forward, ground at y = 0.
  */
-function buildTanju(keep: <T extends { dispose(): void }>(x: T) => T): {
+/**
+ * Tanju and his machine. Exported because he does two jobs now: standing in
+ * the crowd waving the customer out, and riding escort behind Herr Müller —
+ * and it is the same man on the same bike either way, so it is the same build.
+ */
+export function buildTanju(keep: <T extends { dispose(): void }>(x: T) => T): {
   group: THREE.Group;
   arm: THREE.Object3D;
 } {
