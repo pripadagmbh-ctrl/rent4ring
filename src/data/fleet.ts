@@ -39,9 +39,11 @@ export interface Car {
   size: [number, number, number];
   blurb: string;
   /**
-   * Two wheels, not four. Only the mesh cares — the physics is a bicycle
-   * model either way, so a bike is simply a very light, very short RWD car
-   * with modest aero.
+   * Two wheels, not four. The physics is a bicycle model either way, so most
+   * of a bike is simply a very light, very short RWD car with modest aero —
+   * but two things are genuinely different and are handled in `physics.ts`:
+   * it corners by leaning rather than rolling away from the corner, and it
+   * does not drift. A bike past its grip goes down.
    */
   bike?: boolean;
 }
@@ -248,9 +250,12 @@ export const FLEET: Car[] = [
     finalDrive: 4.6,
     redlineRpm: 14500,
     electric: false,
-    // Road tyres, and the model has no lean angle — a superbike's real limit
-    // is how far it dares tip, not the rubber, so this sits deliberately
-    // below the cup-shod Porsches rather than above them.
+    // Road tyres. This sat low because the model had no lean angle at all and
+    // the number was standing in for one; there is a real lean now, and a real
+    // lowside past the limit, so the value is arguably conservative. Left
+    // alone deliberately: changing it moves lap times, and the headless
+    // follower cannot ride the bike well enough to prove a before and after
+    // (OFFEN.md O5).
     grip: 1.2,
     // The winglets are worth about 30 kg at 270 km/h. Real, but small enough
     // that the gauge still reports cornering load rather than downforce.

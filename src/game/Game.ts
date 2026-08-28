@@ -263,6 +263,8 @@ export class Game {
    * ends a ride is the man. Cars keep the old meaning.
    */
   private riderHurt = 0;
+  /** How long the bike's tyres have been asked for more than they have. */
+  private overGripFor = 0;
   /** Seconds until Dale says the next worried thing about his partner. */
   private daleWorryIn = 3;
   /** The patrol car, once the camera has given it a reason to exist. */
@@ -733,6 +735,7 @@ export class Game {
     }
     this.telemetry = this.vehicle.step(dt, input, this.road);
     this.updateWheelie(dt);
+    this.checkLowside(dt);
     this.topSpeed = Math.max(this.topSpeed, this.telemetry.speedKmh);
 
     this.applyDamage(this.telemetry, dt);
@@ -788,6 +791,8 @@ export class Game {
 
     // On the bike a hit hurts the rider rather than the balance sheet, and a
     // solid one puts him over the bars.
+    // (The other way a bike ends up on its side is `checkLowside`, which does
+    // not need a barrier at all.)
     if (this.car.bike && v >= SPILL_FROM_MS) {
       this.riderHurt = Math.min(1, this.riderHurt + v / 26);
       this.throwRider(v);
@@ -834,6 +839,40 @@ export class Game {
    * The statutory tolerance is deducted before the fine: 3 km/h below 100,
    * 3 per cent above it.
    */
+  /**
+   * A motorcycle that runs out of grip does not drift, it falls over.
+   *
+   * The bicycle model underneath is shared with the cars, and past the limit
+   * it does what a car does: shares the friction circle and slides, which on
+   * two wheels is a thing that cannot happen. So the moment the tyres are
+   * genuinely overworked for longer than a twitch, the bike lowsides and the
+   * existing spill takes over — which is also what makes leaning worth
+   * anything, because now there is a price for asking too much of it.
+   *
+   * A brief spike is not a crash: kerbs and crests push grip usage past 1 for
+   * a frame or two constantly, and going down for that would be unplayable.
+   */
+  private checkLowside(dt: number): void {
+    if (this.car.bike !== true || this.spill) return;
+    const t = this.telemetry;
+    if (!t || t.speedKmh < LOWSIDE_MIN_KMH) {
+      this.overGripFor = 0;
+      return;
+    }
+    if (t.gripUsage < LOWSIDE_GRIP) {
+      this.overGripFor = 0;
+      return;
+    }
+    this.overGripFor += dt;
+    if (this.overGripFor < LOWSIDE_SECONDS) return;
+
+    this.overGripFor = 0;
+    // A lowside hurts less than hitting something, but it still hurts, and it
+    // hurts more the faster you were going when the front let go.
+    this.riderHurt = Math.min(1, this.riderHurt + t.speedKmh / 900);
+    this.throwRider(Math.min(9, t.speedKmh / 14));
+  }
+
   private checkSpeedCamera(): void {
     if (this.ticketed || !this.speedCamera) return;
     const i = this.vehicle.trackIndex;
@@ -2038,6 +2077,14 @@ const POLICE_GONE_LINES = [
 
 /** How often Dale frets while Herr Müller is riding, seconds. */
 const DALE_WORRY_GAP = 9;
+
+/**
+ * When a bike goes down on its own. Above this share of the available grip,
+ * held for this long, at more than this speed.
+ */
+const LOWSIDE_GRIP = 1.04;
+const LOWSIDE_SECONDS = 0.22;
+const LOWSIDE_MIN_KMH = 30;
 
 /** Closing speed into a barrier that puts him over the bars, m/s. */
 const SPILL_FROM_MS = 4.5;
